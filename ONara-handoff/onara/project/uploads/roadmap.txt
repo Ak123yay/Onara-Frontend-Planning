@@ -1,0 +1,5140 @@
+
+
+Onara
+
+Complete Execution Roadmap
+
+First 10 Detailed Steps to Build and Launch
+
+Based on Business Plan v11 Final
+
+AI-Powered Website Builder for Small Businesses
+
+Confidential — Internal Use Only
+
+How to Use This Document
+
+This document translates the Onara Business Plan v11 Final into a concrete, chronological execution roadmap. Each of the 10 steps is written as a self-contained unit you can work through independently. Steps are ordered from zero infrastructure through a fully functioning, revenue-generating product.
+
+Each step contains:
+
+An objective and why it matters at this stage
+
+Detailed sub-tasks with exact commands, code snippets, and configuration values
+
+Verification checks so you know when the step is complete
+
+Time estimates and prerequisites
+
+Common mistakes and how to avoid them
+
+Total Estimated Build Time
+
+Working solo part-time (3-4 hours/day): approximately 8-12 weeks to reach a functional v1 that can accept real users. Working full-time: 4-6 weeks. These estimates assume familiarity with JavaScript and Python but no prior experience with every service used here.
+
+The 10 Steps at a Glance
+
+Step
+
+Title
+
+Estimated Time
+
+1
+
+Account Setup &amp; Prerequisites
+
+1-2 days
+
+2
+
+Project Scaffolding &amp; Local Dev Environment
+
+1-2 days
+
+3
+
+Supabase: Database, Auth &amp; Storage
+
+2-3 days
+
+4
+
+Next.js Frontend: Landing Page &amp; Auth
+
+3-5 days
+
+5
+
+FastAPI Pipeline Server: Skeleton &amp; Queue
+
+2-3 days
+
+6
+
+The 10-Agent AI Pipeline: Full Implementation
+
+7-10 days
+
+7
+
+Next.js Dashboard: Build Flow &amp; My Sites
+
+4-6 days
+
+8
+
+Stripe Billing &amp; Subscription Management
+
+3-4 days
+
+9
+
+Deployment Pipeline: GitHub + Cloudflare Pages
+
+2-3 days
+
+10
+
+Launch Preparation: SEO, Legal &amp; Monitoring
+
+2-3 days
+
+STEP 1
+
+Account Setup &amp; Prerequisites
+
+Creating every service account, installing tools, and generating all API keys before writing a single line of code.
+
+Why This Step Comes First
+
+Every Onara service — Supabase, Vercel, Cloudflare, Stripe, GitHub, Google Cloud, Resend — requires an account, and many require cross-referencing credentials between services. Setting everything up at once means you have a master list of keys before writing code, so you never get blocked mid-development waiting for an approval email or a key to propagate. It also lets you identify any service limitations (e.g., GitHub Education verification takes 24-72 hours) before they become critical-path blockers.
+
+1.1  GitHub Accounts
+
+Onara uses a single GitHub account for everything. The GitHub App (Onara Deployer) handles the security isolation that previously required a personal account, by scoping access to onara-sites only.
+
+Personal Development Account
+
+Go to github.com and create or confirm your personal account.
+
+Navigate to github.com/education and click &quot;Get benefits for students.&quot;
+
+Submit verification with your student email address. Approval takes 24-72 hours.
+
+Once approved, confirm GitHub Copilot is enabled: Settings &gt; Copilot &gt; Enable for your account.
+
+Generate a fine-grained Personal Access Token for Copilot SDK auth: Settings &gt; Developer Settings &gt; Personal access tokens &gt; Fine-grained tokens &gt; Generate new token.
+
+Token name: Onara. Expiration: 90 days.
+
+Repository access: None. Permissions: Copilot Requests → Read only. No other permissions needed.
+
+Copy and save as COPILOT_GITHUB_TOKEN.
+
+Deployments — GitHub App
+
+Onara pushes generated site code to GitHub automatically via a GitHub App. This gives the agents write access to the onara-sites repo only — nothing else on your account. Token rotation is automatic (tokens expire hourly and regenerated on demand). This is the only approach used — no PAT.
+
+GitHub App Setup
+
+Go to your GitHub account: Settings &gt; Developer Settings &gt; GitHub Apps &gt; New GitHub App.
+
+Name it &quot;Onara Deployer&quot;. Set Homepage URL to your domain or a placeholder.
+
+Under Permissions, set: Repository permissions &gt; Contents: Read &amp; Write. Repository permissions &gt; Metadata: Read only. Leave everything else as No access.
+
+Under &quot;Where can this GitHub App be installed?&quot; select &quot;Only on this account.&quot;
+
+Click Create GitHub App. Note the App ID shown at the top of the next screen.
+
+Scroll down to Private keys &gt; Generate a private key. A .pem file downloads automatically. Store it securely — treat it like a password.
+
+Click Install App in the sidebar. Install on your account and when prompted select &quot;Only select repositories&quot; and choose onara-sites only.
+
+After installation, note the Installation ID from the URL bar: /settings/installations/{installation_id}.
+
+Save App ID as GITHUB_APP_ID, Installation ID as GITHUB_APP_INSTALLATION_ID, and the contents of the .pem file as GITHUB_APP_PRIVATE_KEY in your credentials file.
+
+GitHub App Token Generation in FastAPI
+
+GitHub App installation tokens expire after 1 hour. Generate them on demand rather than storing them. Add this utility to lib/github_auth.py:
+
+# lib/github_auth.py
+
+import jwt, time, httpx, os
+
+APP_ID = os.getenv(&quot;GITHUB_APP_ID&quot;)
+
+INSTALLATION_ID = os.getenv(&quot;GITHUB_APP_INSTALLATION_ID&quot;)
+
+PRIVATE_KEY = os.getenv(&quot;GITHUB_APP_PRIVATE_KEY&quot;).replace(&quot;\\n&quot;, &quot;\n&quot;)
+
+def generate_installation_token() -&gt; str:
+
+    &quot;&quot;&quot;Generate a fresh GitHub App installation token (valid 1 hour).&quot;&quot;&quot;
+
+    payload = {
+
+        &quot;iat&quot;: int(time.time()) - 60,  # issued 60s ago to account for clock drift
+
+        &quot;exp&quot;: int(time.time()) + 540,  # expires in 9 minutes
+
+        &quot;iss&quot;: APP_ID,
+
+    }
+
+    jwt_token = jwt.encode(payload, PRIVATE_KEY, algorithm=&quot;RS256&quot;)
+
+    r = httpx.post(
+
+        f&quot;https://api.github.com/app/installations/{INSTALLATION_ID}/access_tokens&quot;,
+
+        headers={
+
+            &quot;Authorization&quot;: f&quot;Bearer {jwt_token}&quot;,
+
+            &quot;Accept&quot;: &quot;application/vnd.github+json&quot;,
+
+        }
+
+    )
+
+    r.raise_for_status()
+
+    return r.json()[&quot;token&quot;]  # use this exactly like a PAT
+
+In lib/githubBackup.js (Next.js), call the FastAPI /github/token endpoint to get a fresh installation token, then use it exactly like a PAT in the Authorization header. The REST API calls are identical.
+
+Why a Monorepo for Sites?
+
+Creating a new GitHub repo per site would exhaust the API rate limit very quickly. One monorepo with folders per site is dramatically more efficient and keeps all code in one place for backup and auditing.
+
+1.2  Supabase
+
+Go to supabase.com and create a free account.
+
+Create a new project named &quot;onara&quot;. Choose a strong database password and save it immediately — Supabase will not show it again.
+
+Select a region close to your primary user base (us-east-1 for US, eu-west-1 for Europe).
+
+After project creation (takes 1-2 minutes), go to Project Settings &gt; API. Copy and save: Project URL (as SUPABASE_URL), publishable key (as NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY), secret key (as SUPABASE_SECRET_KEY).
+
+IMPORTANT: The secret key bypasses all Row Level Security. Never expose it to the frontend. Save it only in .env.local server-side variables without the NEXT_PUBLIC_ prefix.
+
+1.3  Google Cloud Console
+
+Go to console.cloud.google.com and sign in.
+
+Create a new project named &quot;onara-prod&quot;.
+
+In the left menu, navigate to APIs &amp; Services &gt; Library.
+
+Search for &quot;Places API&quot; and enable it. Note: you need the Places API (New) not the legacy Places API for best results.
+
+Navigate to APIs &amp; Services &gt; Credentials &gt; Create Credentials &gt; API Key. Name it &quot;Onara Places Key&quot;. Restrict it: API restrictions &gt; Places API only. Copy as GOOGLE_PLACES_API_KEY.
+
+Create a second credential: Create Credentials &gt; OAuth 2.0 Client ID. Application type: Web Application. Name: &quot;Onara OAuth&quot;. Leave redirect URIs blank for now — you will add them in Step 3.
+
+Copy the OAuth Client ID (as GOOGLE_OAUTH_CLIENT_ID) and Client Secret (as GOOGLE_OAUTH_CLIENT_SECRET).
+
+Set up a billing account (required for Google Cloud, even for free tier usage). The Places API is free up to 5,000 requests per month.
+
+1.4  Vercel
+
+Go to vercel.com and sign up with your personal GitHub account (single-click OAuth).
+
+Do not create a project yet. Vercel project creation happens in Step 2 when you push the Next.js repo.
+
+Go to Account Settings &gt; Tokens &gt; Create Token. Name it &quot;onara-deploy&quot;. This token is used for any programmatic Vercel interactions. Copy as VERCEL_TOKEN.
+
+Note your Team ID under Account Settings if you are on a team plan, or your personal username for the free hobby tier.
+
+1.5  Cloudflare
+
+onara.tech vs Cloudflare Pages URLs — Important Distinction
+
+These are two completely separate things:
+
+onara.tech — YOUR domain, which you bought. Your Next.js app lives here. You point this at Vercel (not Cloudflare).
+
+{projectId}.pages.dev — Cloudflare gives this FREE subdomain to every site your users generate. Your users&apos; generated sites live here.
+
+So: onara.tech is your app. onara-site-abc123.pages.dev is a user&apos;s generated site. Cloudflare does not give you onara.tech — you already own that and point it at Vercel.
+
+Go to cloudflare.com and create a free account.
+
+In the dashboard, navigate to Pages. Note your Account ID from the URL bar (format: /accounts/{id}/pages). Copy as CLOUDFLARE_ACCOUNT_ID.
+
+Go to My Profile &gt; API Tokens &gt; Create Token. Use the &quot;Edit Cloudflare Workers&quot; template, but change permissions to: Account &gt; Cloudflare Pages &gt; Edit. Copy as CLOUDFLARE_API_TOKEN.
+
+Install the cloudflared CLI on your mini PC (this is where FastAPI runs — the tunnel exposes it to the internet):
+
+# macOS
+
+brew install cloudflare/cloudflare/cloudflared
+
+# Windows
+
+# Download installer from cloudflare.com/products/tunnel
+
+# Linux
+
+wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+
+sudo dpkg -i cloudflared-linux-amd64.deb
+
+Test the tunnel works by running:
+
+cloudflared tunnel --url http://localhost:8000
+
+You will see a URL like https://random-words-here.trycloudflare.com. This is your PIPELINE_SERVER_URL at launch. Copy it — you will need it when configuring the Next.js .env.local file.
+
+1.6  Stripe
+
+Go to stripe.com and create an account.
+
+Complete the business information form. For pre-launch testing, you can use test mode exclusively.
+
+In the dashboard, go to Developers &gt; API Keys. Copy the Secret Key as STRIPE_SECRET_KEY. Note: use the test mode key (sk_test_...) during development.
+
+Go to Products &gt; Add Product. Create two products:
+
+Starter: $12.00/month recurring. Copy the Price ID as STRIPE_STARTER_PRICE_ID.
+
+Pro: $29.00/month recurring. Copy the Price ID as STRIPE_PRO_PRICE_ID.
+
+Go to Developers &gt; Webhooks &gt; Add Endpoint. You do not have a URL yet — you will configure this in Step 8. For now, save the webhook signing secret (whsec_...) from a test endpoint as STRIPE_WEBHOOK_SECRET.
+
+1.7  Resend
+
+Go to resend.com and create a free account. The free tier allows 3,000 emails per month which is sufficient for launch.
+
+Go to API Keys &gt; Create API Key. Copy as RESEND_API_KEY.
+
+Add and verify a sending domain in Domains &gt; Add Domain. Use your onara domain or a subdomain like mail.onara.com. Follow the DNS verification steps Resend provides.
+
+1.8  Ollama Cloud Account
+
+Go to ollama.com and create a free account.
+
+Navigate to Settings &gt; API Keys and generate a key. Copy and save as OLLAMA_API_KEY.
+
+The cloud models used by Onara are gpt-oss:20b-cloud (Agent 1), glm-5.1:cloud (Agents 4+5), minimax-m2.7:cloud (Agent 7), and minimax-m2.5:cloud (Agent 9). All are on the free tier — no payment method required.
+
+Set OLLAMA_API_KEY in both the mini PC .env files. The local models on your PC need no API key — they run completely free.
+
+1.9  Development Environment Setup
+
+Onara runs across two machines during development. Your main PC handles all local Ollama AI model inference — the compute-heavy job that benefits from dedicated RAM. Your mini PC runs everything else: Next.js, FastAPI pipeline server, Cloudflare tunnel, and Stripe CLI. This split keeps the AI models from competing with server processes for memory.
+
+Two-Machine Dev Split
+
+PC: Ollama only. Runs qwen3:8b and llama3.3:8b. FastAPI calls it over your local network via http://PC_LOCAL_IP:11434
+
+Mini PC: Everything else. Next.js (port 3000), FastAPI pipeline server (port 8000), Stripe CLI, Cloudflare tunnel. This is where you write code and run servers.
+
+On Your PC — Ollama Setup
+
+# Install Ollama
+
+# macOS/Windows: download from ollama.com/download
+
+# Linux: curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull all local models Onara uses
+
+# Pull on your PC (all local models)
+
+ollama pull qwen3:8b        # Agents 2, 3, 8, 10 — best under-8B instruction model
+
+ollama pull llama3.3:8b     # Supervisor + all cloud fallbacks
+
+# Start Ollama (keep running in background)
+
+ollama serve
+
+# Find your PC local IP — you need this on the mini PC
+
+# macOS/Linux: ifconfig | grep &quot;inet &quot; | grep -v 127.0.0.1
+
+# Windows:    ipconfig | findstr &quot;IPv4&quot;
+
+# Example result: 192.168.1.45
+
+On Your Mini PC — All Other Tools
+
+# Node.js v22+
+
+node --version   # must be v22.x.x or higher
+
+# If not: nvm install 22 &amp;&amp; nvm use 22
+
+# Python 3.11+
+
+python3 --version
+
+# macOS: brew install python@3.11
+
+# Git
+
+git --version
+
+# VS Code — code.visualstudio.com
+
+# PM2 — keeps FastAPI running, auto-restarts on crash
+
+npm install -g pm2
+
+# Stripe CLI — local webhook testing
+
+npm install -g stripe
+
+Point the FastAPI Ollama client at your PC instead of localhost by adding your PC IP to the mini PC .env:
+
+# onara-pipeline/.env (on mini PC)
+
+OLLAMA_LOCAL_URL=http://192.168.1.45:11434   # replace with your PC IP
+
+OLLAMA_API_KEY=your-ollama-api-key           # for cloud models
+
+# lib/ollama_client.py uses OLLAMA_LOCAL_URL to reach your PC
+
+# and OLLAMA_API_KEY to reach Ollama cloud models
+
+# Test the connection from the mini PC:
+
+curl http://192.168.1.45:11434/api/tags
+
+# Should return a list of your pulled models
+
+1.10  Master Credentials File
+
+Create a secure local file (NOT in any git repo) called onara-credentials.txt containing every key and credential gathered in this step. Use a password manager like 1Password or Bitwarden as an alternative.
+
+# onara-credentials.txt — NEVER COMMIT THIS FILE
+
+# GitHub
+
+GITHUB_APP_ID=
+
+GITHUB_APP_INSTALLATION_ID=
+
+GITHUB_APP_PRIVATE_KEY=      # full contents of the .pem file
+
+# Supabase
+
+SUPABASE_URL=https://your-project.supabase.co
+
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+
+SUPABASE_SECRET_KEY=
+
+# Google
+
+GOOGLE_PLACES_API_KEY=
+
+GOOGLE_OAUTH_CLIENT_ID=
+
+GOOGLE_OAUTH_CLIENT_SECRET=
+
+# Cloudflare
+
+CLOUDFLARE_ACCOUNT_ID=
+
+CLOUDFLARE_API_TOKEN=
+
+# Stripe
+
+STRIPE_SECRET_KEY=
+
+STRIPE_WEBHOOK_SECRET=
+
+STRIPE_STARTER_PRICE_ID=
+
+STRIPE_PRO_PRICE_ID=
+
+# Resend
+
+RESEND_API_KEY=
+
+# GitHub Copilot SDK
+
+COPILOT_GITHUB_TOKEN=    # fine-grained PAT, Copilot Requests Read only
+
+# Ollama
+
+OLLAMA_API_KEY=
+
+# Shared pipeline secret (generate a random 64-char hex string)
+
+# node -e &quot;console.log(require(&apos;crypto&apos;).randomBytes(32).toString(&apos;hex&apos;))&quot;
+
+PIPELINE_SECRET=
+
+Step 1 Verification Checklist
+
+Complete all of these before moving to Step 2
+
+Each item below must be verified before proceeding. A single missing credential will block development later.
+
+Personal GitHub account with GitHub Education approved and Copilot enabled — one account handles everything
+
+Fine-grained PAT created: Settings &gt; Developer Settings &gt; Fine-grained tokens. Name: Onara. Expiry: 90 days. Repo access: None. Permissions: Copilot Requests (Read). Saved as COPILOT_GITHUB_TOKEN
+
+onara-sites private repo created on your personal GitHub account
+
+Supabase project created, URL and all three keys saved
+
+Google Cloud project with Places API enabled, API key and OAuth credentials saved
+
+Vercel account linked to GitHub
+
+Cloudflare account created, Account ID and API token saved, cloudflared CLI installed and tested
+
+Stripe account created, secret key and both Price IDs saved
+
+Resend account created, API key saved, sending domain verified
+
+Ollama cloud account created, API key saved
+
+Node.js v22+, Python 3.11+, Git, VS Code installed locally
+
+Both local Ollama models pulled and verified: ollama pull qwen3:8b &amp;&amp; ollama pull llama3.3:8b — confirm with: ollama list
+
+Master credentials file created and saved securely outside any git directory
+
+STEP 2
+
+Project Scaffolding &amp; Local Dev Environment
+
+Creating both repositories, establishing folder structure, configuring environment variables, and confirming both servers run locally.
+
+Why This Step Matters
+
+Getting both repositories scaffolded and running locally before touching any feature code is the professional way to build. You establish the contract between the two servers — the shared PIPELINE_SECRET, the URL structure, the data formats — before any implementation. This prevents the most common problem in multi-service projects: discovering an architecture mismatch halfway through building a feature.
+
+2.1  Create the Next.js App Repository
+
+# Create the Next.js project
+
+npx create-next-app@latest onara-app
+
+# Answer the prompts:
+
+# TypeScript? No (use JavaScript for faster development)
+
+# ESLint? Yes
+
+# Tailwind CSS? Yes
+
+# src/ directory? No
+
+# App Router? Yes
+
+# Import alias? No
+
+cd onara-app
+
+# Install all dependencies upfront
+
+npm install @supabase/supabase-js @supabase/ssr stripe resend
+
+# Create the Git repo and push to GitHub
+
+git init
+
+git add .
+
+git commit -m &quot;Initial Next.js scaffold&quot;
+
+git remote add origin https://github.com/YOUR_USERNAME/onara-app.git
+
+git push -u origin main
+
+After the push, go to vercel.com &gt; Add New Project. Import the onara-app repository. Vercel will auto-detect Next.js. Click Deploy. Your first (empty) deployment is now live at onara-app.vercel.app. Every future push to main will trigger an automatic redeployment.
+
+2.2  Build the Complete Folder Structure — Next.js
+
+Create every folder and placeholder file according to the architecture spec. You are not writing logic yet — just establishing the structure so imports work and you can navigate the codebase cleanly.
+
+# Run from inside onara-app/
+
+mkdir -p app/login app/signup app/dashboard/build app/dashboard/sites
+
+mkdir -p &quot;app/dashboard/preview/[id]&quot; app/dashboard/account
+
+mkdir -p app/api/auth app/api/oauth/google app/api/sites
+
+mkdir -p app/api/places app/api/account app/api/stripe
+
+mkdir -p app/api/webhooks/stripe
+
+mkdir -p components lib
+
+# Create placeholder route files
+
+touch app/login/page.jsx app/signup/page.jsx
+
+touch app/dashboard/page.jsx app/dashboard/build/page.jsx
+
+touch app/dashboard/sites/page.jsx
+
+touch &quot;app/dashboard/preview/[id]/page.jsx&quot;
+
+touch app/dashboard/account/page.jsx
+
+# Create placeholder API route files
+
+touch app/api/auth/route.js
+
+touch app/api/oauth/google/route.js
+
+touch app/api/sites/route.js
+
+touch app/api/places/route.js
+
+touch app/api/account/route.js
+
+touch app/api/stripe/route.js
+
+touch app/api/webhooks/stripe/route.js
+
+# Create component and lib stubs
+
+touch components/Sidebar.jsx components/AgentProgress.jsx
+
+touch components/QueuePosition.jsx components/SiteCard.jsx
+
+touch components/Toast.jsx components/StepIndicator.jsx
+
+touch lib/supabase.js lib/api.js
+
+2.3  Create the FastAPI Pipeline Repository
+
+# Create the pipeline project folder
+
+mkdir onara-pipeline &amp;&amp; cd onara-pipeline
+
+# Create Python virtual environment
+
+python3 -m venv venv
+
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install all Python dependencies
+
+pip install fastapi uvicorn httpx ollama chromadb sentence-transformers
+
+pip install python-jose[cryptography] slowapi rank-bm25 redis sqlite3
+
+# Save dependencies
+
+pip freeze &gt; requirements.txt
+
+# Create folder structure
+
+mkdir -p agents rag/docs lib
+
+# Create all agent stub files
+
+touch agents/__init__.py
+
+touch agents/analyst.py agents/content_writer.py agents/style_agent.py
+
+touch agents/planner.py agents/prompt_engineer.py agents/code_generator.py
+
+touch agents/debugger.py agents/seo_agent.py agents/qa_agent.py agents/mobile_optimizer.py
+
+# Create library stubs
+
+touch lib/__init__.py lib/ollama_client.py lib/copilot_client.py
+
+# Create RAG stubs
+
+touch rag/__init__.py rag/vector_store.py rag/embedder.py
+
+# Create main entry point
+
+touch main.py .env
+
+# Initialize git and push
+
+git init &amp;&amp; git add . &amp;&amp; git commit -m &quot;Initial FastAPI scaffold&quot;
+
+git remote add origin https://github.com/YOUR_USERNAME/onara-pipeline.git
+
+git push -u origin main
+
+2.4  Configure Environment Variables
+
+Create the .env.local file for Next.js. This file is read automatically by Next.js and must never be committed.
+
+# onara-app/.env.local
+
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-anon-key
+
+SUPABASE_SECRET_KEY=your-service-role-key
+
+PIPELINE_SERVER_URL=https://your-tunnel.trycloudflare.com
+
+PIPELINE_SECRET=your-64-char-random-hex
+
+GOOGLE_PLACES_API_KEY=your-places-key
+
+GOOGLE_OAUTH_CLIENT_ID=your-oauth-client-id
+
+GOOGLE_OAUTH_CLIENT_SECRET=your-oauth-client-secret
+
+# GitHub App (for secure repo access — scoped to onara-sites only)
+
+GITHUB_APP_ID=your-app-id
+
+GITHUB_APP_INSTALLATION_ID=your-installation-id
+
+GITHUB_APP_PRIVATE_KEY=your-pem-contents
+
+CLOUDFLARE_ACCOUNT_ID=your-account-id
+
+CLOUDFLARE_API_TOKEN=your-api-token
+
+STRIPE_SECRET_KEY=sk_test_your-key
+
+STRIPE_WEBHOOK_SECRET=whsec_your-secret
+
+STRIPE_STARTER_PRICE_ID=price_your-id
+
+STRIPE_PRO_PRICE_ID=price_your-id
+
+RESEND_API_KEY=your-resend-key
+
+Create the .env file for FastAPI:
+
+# onara-pipeline/.env
+
+OLLAMA_API_KEY=your-ollama-api-key
+
+OLLAMA_LOCAL_URL=http://192.168.1.45:11434   # your PC IP
+
+COPILOT_GITHUB_TOKEN=your-fine-grained-copilot-pat
+
+PIPELINE_SECRET=same-value-as-nextjs
+
+2.5  Create a Working main.py (FastAPI Skeleton)
+
+Write the minimal FastAPI entry point now. You will expand each route in Step 5 and Step 6. This skeleton proves the server starts and exposes the /health endpoint that UptimeRobot will later monitor.
+
+# onara-pipeline/main.py
+
+from fastapi import FastAPI, Depends, HTTPException, Header
+
+from fastapi.middleware.cors import CORSMiddleware
+
+import os, json
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+PIPELINE_SECRET = os.getenv(&quot;PIPELINE_SECRET&quot;)
+
+app = FastAPI(title=&quot;Onara Pipeline&quot;)
+
+app.add_middleware(
+
+    CORSMiddleware,
+
+    allow_origins=[&quot;https://onara-app.vercel.app&quot;, &quot;http://localhost:3000&quot;],
+
+    allow_methods=[&quot;*&quot;],
+
+    allow_headers=[&quot;*&quot;],
+
+)
+
+def verify_secret(x_pipeline_secret: str = Header(None)):
+
+    if x_pipeline_secret != PIPELINE_SECRET:
+
+        raise HTTPException(status_code=401, detail=&quot;Unauthorized&quot;)
+
+@app.get(&quot;/health&quot;)
+
+async def health():
+
+    return {&quot;status&quot;: &quot;ok&quot;, &quot;queue_length&quot;: 0}
+
+@app.post(&quot;/pipeline/start&quot;)
+
+async def start_pipeline(body: dict, _=Depends(verify_secret)):
+
+    return {&quot;jobId&quot;: body.get(&quot;jobId&quot;), &quot;status&quot;: &quot;queued&quot;}
+
+@app.get(&quot;/pipeline/status/{job_id}&quot;)
+
+async def pipeline_status(job_id: str, _=Depends(verify_secret)):
+
+    return {&quot;jobId&quot;: job_id, &quot;phase&quot;: &quot;pending&quot;}
+
+2.6  Confirm Both Servers Run
+
+# Terminal 1: Start Next.js
+
+cd onara-app &amp;&amp; npm run dev
+
+# Visit http://localhost:3000 — should show Next.js default page
+
+# Terminal 2: Start FastAPI
+
+cd onara-pipeline
+
+source venv/bin/activate
+
+pip install python-dotenv  # if not already installed
+
+uvicorn main:app --reload --port 8000
+
+# Visit http://localhost:8000/health — should return {&quot;status&quot;:&quot;ok&quot;}
+
+# Terminal 3: Start Cloudflare Tunnel
+
+cloudflared tunnel --url http://localhost:8000
+
+# Copy the generated URL into .env.local as PIPELINE_SERVER_URL
+
+# Terminal 4: Keep Ollama running
+
+ollama serve
+
+2.7  Configure .gitignore for Both Repos
+
+# onara-app/.gitignore (add to existing)
+
+.env.local
+
+.env
+
+temp-projects/
+
+# onara-pipeline/.gitignore
+
+.env
+
+__pycache__/
+
+venv/
+
+*.pyc
+
+jobs.db
+
+chroma_db/
+
+Step 2 Verification Checklist
+
+onara-app repo on GitHub, linked to Vercel, first deployment live
+
+All Next.js folders and placeholder files created
+
+onara-pipeline repo on GitHub with all agent stubs created — including lib/copilot_client.py stub
+
+.env.local and .env files populated with all credentials
+
+Both files added to .gitignore, confirmed not tracked by git
+
+Next.js runs on localhost:3000 without errors
+
+FastAPI runs on localhost:8000/health returning {&quot;status&quot;:&quot;ok&quot;}
+
+Cloudflare Tunnel URL copied into PIPELINE_SERVER_URL
+
+Ollama is running (ollama serve) on PC with qwen3:8b and llama3.3:8b loaded — verify with: ollama list
+
+STEP 3
+
+Supabase: Database, Auth &amp; Storage
+
+Creating the full database schema, enabling Row Level Security, configuring Google OAuth, and setting up the storage bucket.
+
+Why Database-First Development Works
+
+Building your data layer before your UI prevents the most expensive architectural mistake in web development: designing your UI and then discovering your schema cannot support it. Every feature in Onara — billing, revisions, site management, trial expiry — is driven by database state. Getting the schema right now means all subsequent steps build on a solid foundation.
+
+3.1  Create the Database Schema
+
+In the Supabase dashboard, go to the SQL Editor and run the following complete schema. Run it as a single script.
+
+-- ============================================================
+
+-- Onara Database Schema v1
+
+-- Run in Supabase SQL Editor
+
+-- ============================================================
+
+CREATE TABLE users (
+
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  email                 VARCHAR(255) UNIQUE NOT NULL,
+
+  password_hash         VARCHAR(255),          -- NULL for OAuth users
+
+  plan                  TEXT DEFAULT &apos;free&apos;,
+
+  sub_status            TEXT DEFAULT &apos;inactive&apos;,
+
+  stripe_customer_id    VARCHAR(255),
+
+  stripe_subscription_id VARCHAR(255),
+
+  referral_code         VARCHAR(32) UNIQUE DEFAULT
+
+                        substring(md5(random()::text), 1, 8),
+
+  trial_ends_at         TIMESTAMPTZ,
+
+  is_trial              BOOLEAN DEFAULT FALSE,
+
+  referred_by           UUID REFERENCES users(id),
+
+  created_at            TIMESTAMPTZ DEFAULT NOW()
+
+);
+
+CREATE TABLE projects (
+
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  user_id               UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
+  project_id            VARCHAR(64) UNIQUE NOT NULL,
+
+  business_name         VARCHAR(255),
+
+  github_folder         VARCHAR(512),
+
+  cloudflare_url        VARCHAR(512),
+
+  cloudflare_project_id VARCHAR(64),
+
+  show_url              BOOLEAN DEFAULT FALSE,
+
+  revisions_used        INT DEFAULT 0,
+
+  revisions_allowed     INT DEFAULT 3,
+
+  revisions_reset       TIMESTAMPTZ,
+
+  bucket_path           VARCHAR(512),
+
+  status                TEXT DEFAULT &apos;generating&apos;,
+
+  blueprint             JSONB,
+
+  components            JSONB,
+
+  created_at            TIMESTAMPTZ DEFAULT NOW()
+
+);
+
+3.2  Enable Row Level Security
+
+WARNING
+
+RLS is NOT enabled by default in Supabase. If you skip this step, any user can read all other users&apos; data using the publishable key from the browser. This is a critical security requirement — run this immediately after creating the tables.
+
+-- Step 1: Enable RLS on both tables
+
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
+
+-- Step 2: Create access policies
+
+CREATE POLICY user_self_access ON users
+
+  FOR ALL USING (auth.uid() = id);
+
+CREATE POLICY project_owner ON projects
+
+  FOR ALL USING (auth.uid() = user_id);
+
+-- Step 3: Verify RLS is working
+
+-- In Supabase Table Editor, confirm the shield icon is green on both tables.
+
+-- Test: use the Supabase JS client with the publishable key and confirm you
+
+-- cannot select rows belonging to another user_id.
+
+3.3  Configure Google OAuth in Supabase
+
+In the Supabase dashboard, navigate to Authentication &gt; Providers &gt; Google.
+
+Toggle &quot;Enable Google provider&quot; to on.
+
+Paste the GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET from Step 1.
+
+Copy the Callback URL shown by Supabase (format: https://your-project.supabase.co/auth/v1/callback).
+
+Go back to Google Cloud Console &gt; APIs &amp; Services &gt; Credentials &gt; your OAuth 2.0 Client ID.
+
+Under &quot;Authorized redirect URIs,&quot; add: the Supabase callback URL and http://localhost:3000/dashboard (for local dev).
+
+Save. OAuth is now configured.
+
+Google OAuth Testing Mode — Important
+
+When you first create the OAuth app in Google Cloud Console, it starts in Testing mode. In this mode only Google accounts you explicitly add as test users can sign in. Everyone else sees an &quot;app not verified&quot; error.
+
+To add test users: Google Cloud Console &gt; APIs &amp; Services &gt; OAuth consent screen &gt; Test users &gt; Add users. Add your own Google account and any other accounts you want to test with.
+
+This is fine for development. When you are ready to launch publicly, click &quot;Publish App&quot; on the OAuth consent screen. Google may require a verification review (takes a few days) if you are requesting sensitive scopes — but for basic Google Sign-In (email and profile only) verification is usually automatic.
+
+3.4  Create the Supabase Auth Trigger
+
+When a user signs up via Google OAuth, Supabase creates a record in auth.users but not in your public users table. This trigger automatically creates the corresponding public users record, sets the reverse trial, and generates a referral code.
+
+-- Trigger: auto-create users record on new auth signup
+
+CREATE OR REPLACE FUNCTION handle_new_user()
+
+RETURNS TRIGGER AS $$
+
+BEGIN
+
+  INSERT INTO public.users (id, email, is_trial, plan, trial_ends_at)
+
+  VALUES (
+
+    NEW.id,
+
+    NEW.email,
+
+    TRUE,
+
+    &apos;pro&apos;,
+
+    NOW() + INTERVAL &apos;14 days&apos;
+
+  );
+
+  RETURN NEW;
+
+END;
+
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+
+  AFTER INSERT ON auth.users
+
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+3.5  Create the Supabase Storage Bucket
+
+In the Supabase dashboard, navigate to Storage &gt; Create Bucket.
+
+Name: generated-sites. Set to Private (no public access).
+
+Click Create Bucket.
+
+Files will be stored at path: {user_id}/{project_id}/site.zip
+
+Access is only available via the secret key on the backend.
+
+Add a storage policy to allow the secret key full access and deny all other access:
+
+-- Storage policy: secret key has full access, publishable key has none
+
+-- (This is the default for private buckets — verify it in
+
+-- Storage &gt; Policies that no anon policies exist.)
+
+3.6  Initialize the Supabase Client in Next.js
+
+Create lib/supabase.js with two clients: one using the publishable key for frontend calls, one using the secret key for backend API routes.
+
+// lib/supabase.js
+
+import { createClient } from &apos;@supabase/supabase-js&apos;
+
+// Frontend client — uses publishable key, respects RLS
+
+export const supabase = createClient(
+
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+
+)
+
+// Backend client — uses secret key, bypasses RLS
+
+// ONLY use this in API routes (server-side), never in components
+
+export function getServiceClient() {
+
+  return createClient(
+
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+
+    process.env.SUPABASE_SECRET_KEY
+
+  )
+
+}
+
+3.7  Set Up Supabase Edge Functions
+
+Supabase edge functions are written in Deno TypeScript and deployed via the Supabase CLI. Create the three functions needed for Onara now, even though you will fill in the full logic in later steps.
+
+# Install Supabase CLI
+
+npm install -g supabase
+
+# Login and link to your project
+
+supabase login
+
+supabase link --project-ref your-project-ref
+
+# Create the three edge functions
+
+supabase functions new stripe-webhook
+
+supabase functions new reset-revisions
+
+supabase functions new downgrade-trials
+
+Each function creates a folder under supabase/functions/ with an index.ts file. You will write the full implementation in Step 8 (Stripe) and can leave reset-revisions and downgrade-trials as stubs for now.
+
+3.8  Enable pg_cron for Scheduled Functions
+
+The revision reset and trial downgrade edge functions need to run on a schedule. Enable pg_cron in Supabase to schedule them.
+
+-- Run in Supabase SQL Editor
+
+-- Enable pg_cron extension
+
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+-- Schedule reset-revisions to run daily at midnight UTC
+
+SELECT cron.schedule(
+
+  &apos;reset-revisions&apos;,
+
+  &apos;0 0 * * *&apos;,
+
+  $$ SELECT net.http_post(
+
+    url := &apos;https://your-project.supabase.co/functions/v1/reset-revisions&apos;,
+
+    headers := &apos;{&quot;Authorization&quot;: &quot;Bearer SERVICE_KEY&quot;}&apos;::jsonb
+
+  ) $$
+
+);
+
+-- Schedule downgrade-trials to run daily at 1am UTC
+
+SELECT cron.schedule(
+
+  &apos;downgrade-trials&apos;,
+
+  &apos;0 1 * * *&apos;,
+
+  $$ SELECT net.http_post(
+
+    url := &apos;https://your-project.supabase.co/functions/v1/downgrade-trials&apos;,
+
+    headers := &apos;{&quot;Authorization&quot;: &quot;Bearer SERVICE_KEY&quot;}&apos;::jsonb
+
+  ) $$
+
+);
+
+Step 3 Verification Checklist
+
+Both tables created in Supabase and visible in Table Editor
+
+RLS enabled on both tables — green shield icon visible
+
+Both RLS policies created and tested
+
+New user trigger created and tested (create a test user, confirm it appears in public.users)
+
+Google OAuth configured in Supabase and redirect URI added to Google Cloud Console
+
+generated-sites storage bucket created as private
+
+lib/supabase.js created with both clients
+
+Supabase CLI installed, logged in, and linked to project
+
+All three edge function folders created
+
+pg_cron enabled and both schedules created
+
+STEP 4
+
+Next.js Frontend: Landing Page &amp; Auth
+
+Building the public-facing landing page with the brown design language, implementing sign-up/login with Google OAuth and email, and protecting dashboard routes.
+
+Design System Foundation
+
+All Onara UI uses a consistent brown-themed design system defined in Tailwind and a shared globals.css. Before building any page, establish the design tokens so every component automatically matches the brand.
+
+Tailwind Config — Add Custom Colors
+
+// tailwind.config.js
+
+module.exports = {
+
+  theme: {
+
+    extend: {
+
+      colors: {
+
+        espresso:  &apos;#3B1F0E&apos;,
+
+        gold:      &apos;#D4A853&apos;,
+
+        tan:       &apos;#C4A882&apos;,
+
+        cream:     &apos;#FAF3E0&apos;,
+
+        midBrown:  &apos;#6B3F20&apos;,
+
+        darkBrown: &apos;#2A1508&apos;,
+
+      },
+
+      fontFamily: {
+
+        sans:    [&apos;Inter&apos;, &apos;sans-serif&apos;],
+
+        display: [&apos;Playfair Display&apos;, &apos;serif&apos;],
+
+      }
+
+    }
+
+  }
+
+}
+
+globals.css — Google Fonts Import
+
+/* app/globals.css — add at top */  
+
+@import url(&apos;https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Playfair+Display:wght@700&amp;display=swap&apos;);
+
+4.1  Landing Page — app/page.jsx
+
+The landing page has five sections: Navbar, Hero, How It Works, Pricing, and Footer. Each section should be a separate component file in components/ for maintainability.
+
+Navbar Component
+
+Sticky navigation with the Onara logo, three center links, and two right-side CTAs. The &quot;Get Started Free&quot; button is gold with dark brown text. On mobile it collapses to a hamburger.
+
+// components/Navbar.jsx
+
+&apos;use client&apos;
+
+export default function Navbar() {
+
+  return (
+
+    &lt;nav className=&quot;sticky top-0 z-50 bg-espresso shadow-md px-6 py-4 flex items-center justify-between&quot;&gt;
+
+      &lt;span className=&quot;font-display text-2xl text-gold&quot;&gt;Onara&lt;/span&gt;
+
+      &lt;div className=&quot;hidden md:flex gap-8 text-tan text-sm font-medium&quot;&gt;
+
+        &lt;a href=&quot;#how-it-works&quot;&gt;How It Works&lt;/a&gt;
+
+        &lt;a href=&quot;#pricing&quot;&gt;Pricing&lt;/a&gt;
+
+        &lt;a href=&quot;#examples&quot;&gt;Examples&lt;/a&gt;
+
+      &lt;/div&gt;
+
+      &lt;div className=&quot;flex gap-3&quot;&gt;
+
+        &lt;a href=&quot;/login&quot; className=&quot;px-4 py-2 text-tan text-sm&quot;&gt;Log in&lt;/a&gt;
+
+        &lt;a href=&quot;/signup&quot; className=&quot;px-4 py-2 bg-gold text-espresso font-semibold rounded-lg text-sm&quot;&gt;
+
+          Get Started Free
+
+        &lt;/a&gt;
+
+      &lt;/div&gt;
+
+    &lt;/nav&gt;
+
+  )
+
+}
+
+Hero Component
+
+Full-width hero with headline, subheadline, single CTA, and &quot;No credit card required&quot; note beneath.
+
+// components/Hero.jsx
+
+&apos;use client&apos;
+
+export default function Hero() {
+
+  return (
+
+    &lt;section className=&quot;bg-cream py-24 px-6 text-center&quot;&gt;
+
+      &lt;h1 className=&quot;font-display text-5xl md:text-6xl text-espresso mb-6 max-w-3xl mx-auto&quot;&gt;
+
+        Your business website, live in minutes
+
+      &lt;/h1&gt;
+
+      &lt;p className=&quot;text-midBrown text-xl mb-10 max-w-xl mx-auto&quot;&gt;
+
+        Import your Google Business Profile. Our AI builds and deploys your site automatically.
+
+      &lt;/p&gt;
+
+      &lt;a href=&quot;/signup&quot;
+
+         className=&quot;inline-block bg-gold text-espresso font-bold text-lg px-10 py-4 rounded-xl shadow hover:bg-yellow-500 transition&quot;&gt;
+
+        Get Started Free
+
+      &lt;/a&gt;
+
+      &lt;p className=&quot;text-tan text-sm mt-3&quot;&gt;No credit card required&lt;/p&gt;
+
+    &lt;/section&gt;
+
+  )
+
+}
+
+Pricing Component — 3-Column Table
+
+Three pricing tiers displayed in cards. The Starter card has a gold border and a &quot;Most Popular&quot; badge. Each card has a feature checklist.
+
+// components/Pricing.jsx
+
+&apos;use client&apos;
+
+const plans = [
+
+  { name: &apos;Free&apos;, price: &apos;$0&apos;, features: [
+
+    &apos;1 website&apos;, &apos;3 revisions/month&apos;, &apos;Dashboard preview only&apos;, &apos;Onara branding&apos;,
+
+  ], cta: &apos;Get Started&apos;, href: &apos;/signup&apos;, highlight: false },
+
+  { name: &apos;Starter&apos;, price: &apos;$12/mo&apos;, features: [
+
+    &apos;1 website&apos;, &apos;10 revisions/month&apos;, &apos;Live public URL&apos;, &apos;Custom domain&apos;, &apos;No branding&apos;,
+
+  ], cta: &apos;Start Free Trial&apos;, href: &apos;/signup&apos;, highlight: true },
+
+  { name: &apos;Pro&apos;, price: &apos;$29/mo&apos;, features: [
+
+    &apos;3 websites&apos;, &apos;Unlimited revisions&apos;, &apos;Live public URLs&apos;, &apos;Code download&apos;, &apos;Priority queue&apos;,
+
+  ], cta: &apos;Start Free Trial&apos;, href: &apos;/signup&apos;, highlight: false },
+
+]
+
+export default function Pricing() {
+
+  return (
+
+    &lt;section id=&quot;pricing&quot; className=&quot;py-20 px-6 bg-espresso&quot;&gt;
+
+      &lt;h2 className=&quot;font-display text-4xl text-gold text-center mb-12&quot;&gt;Simple Pricing&lt;/h2&gt;
+
+      &lt;div className=&quot;grid md:grid-cols-3 gap-8 max-w-5xl mx-auto&quot;&gt;
+
+        {plans.map(p =&gt; (
+
+          &lt;div key={p.name}
+
+               className={`rounded-2xl p-8 bg-cream ${p.highlight ? &apos;ring-2 ring-gold&apos; : &apos;&apos;}`}&gt;
+
+            {p.highlight &amp;&amp; &lt;span className=&quot;bg-gold text-espresso text-xs font-bold px-3 py-1 rounded-full&quot;&gt;Most Popular&lt;/span&gt;}
+
+            &lt;h3 className=&quot;text-2xl font-bold text-espresso mt-4&quot;&gt;{p.name}&lt;/h3&gt;
+
+            &lt;p className=&quot;text-3xl font-bold text-midBrown my-2&quot;&gt;{p.price}&lt;/p&gt;
+
+            &lt;ul className=&quot;mt-4 space-y-2 mb-6&quot;&gt;
+
+              {p.features.map(f =&gt; &lt;li key={f} className=&quot;text-sm text-darkBrown&quot;&gt;✓ {f}&lt;/li&gt;)}
+
+            &lt;/ul&gt;
+
+            &lt;a href={p.href} className=&quot;block text-center bg-espresso text-gold font-semibold py-3 rounded-xl&quot;&gt;
+
+              {p.cta}
+
+            &lt;/a&gt;
+
+          &lt;/div&gt;
+
+        ))}
+
+      &lt;/div&gt;
+
+    &lt;/section&gt;
+
+  )
+
+}
+
+4.2  Auth Pages — Sign Up and Log In
+
+Both pages follow the same layout: full-page brown gradient, centered white card, Google OAuth button at top, divider, email/password form below. The Supabase client handles the entire OAuth redirect flow with a single function call.
+
+// app/signup/page.jsx
+
+&apos;use client&apos;
+
+import { useState } from &apos;react&apos;
+
+import { supabase } from &apos;@/lib/supabase&apos;
+
+import { useRouter } from &apos;next/navigation&apos;
+
+export default function SignupPage() {
+
+  const router = useRouter()
+
+  const [email, setEmail] = useState(&apos;&apos;)
+
+  const [password, setPassword] = useState(&apos;&apos;)
+
+  const [error, setError] = useState(&apos;&apos;)
+
+  async function handleGoogle() {
+
+    await supabase.auth.signInWithOAuth({
+
+      provider: &apos;google&apos;,
+
+      options: { redirectTo: `${window.location.origin}/dashboard` }
+
+    })
+
+  }
+
+  async function handleEmail(e) {
+
+    e.preventDefault()
+
+    const { error } = await supabase.auth.signUp({ email, password })
+
+    if (error) setError(error.message)
+
+    else router.push(&apos;/dashboard&apos;)
+
+  }
+
+  return (
+
+    &lt;div className=&quot;min-h-screen bg-gradient-to-br from-espresso to-midBrown flex items-center justify-center&quot;&gt;
+
+      &lt;div className=&quot;bg-white rounded-2xl p-10 w-full max-w-md shadow-2xl&quot;&gt;
+
+        &lt;h1 className=&quot;font-display text-3xl text-espresso mb-6&quot;&gt;Create your account&lt;/h1&gt;
+
+        &lt;button onClick={handleGoogle}
+
+                className=&quot;w-full bg-gold text-espresso font-bold py-3 rounded-xl mb-4 flex items-center justify-center gap-2&quot;&gt;
+
+          Continue with Google
+
+        &lt;/button&gt;
+
+        &lt;div className=&quot;flex items-center my-4&quot;&gt;&lt;hr className=&quot;flex-1&quot;/&gt;&lt;span className=&quot;px-3 text-gray-400 text-sm&quot;&gt;or&lt;/span&gt;&lt;hr className=&quot;flex-1&quot;/&gt;&lt;/div&gt;
+
+        &lt;form onSubmit={handleEmail} className=&quot;space-y-4&quot;&gt;
+
+          &lt;input type=&quot;email&quot; placeholder=&quot;Email&quot; value={email} onChange={e=&gt;setEmail(e.target.value)}
+
+                 className=&quot;w-full border border-tan rounded-lg px-4 py-3 text-sm&quot;/&gt;
+
+          &lt;input type=&quot;password&quot; placeholder=&quot;Password&quot; value={password} onChange={e=&gt;setPassword(e.target.value)}
+
+                 className=&quot;w-full border border-tan rounded-lg px-4 py-3 text-sm&quot;/&gt;
+
+          {error &amp;&amp; &lt;p className=&quot;text-red-500 text-sm&quot;&gt;{error}&lt;/p&gt;}
+
+          &lt;button type=&quot;submit&quot; className=&quot;w-full bg-espresso text-gold font-bold py-3 rounded-xl&quot;&gt;
+
+            Create Account
+
+          &lt;/button&gt;
+
+        &lt;/form&gt;
+
+        &lt;p className=&quot;text-center text-sm text-gray-500 mt-4&quot;&gt;
+
+          Already have an account? &lt;a href=&quot;/login&quot; className=&quot;text-gold&quot;&gt;Log in&lt;/a&gt;
+
+        &lt;/p&gt;
+
+      &lt;/div&gt;
+
+    &lt;/div&gt;
+
+  )
+
+}
+
+4.3  Route Protection Middleware
+
+Create middleware.js at the root of the Next.js app. This runs before every request and redirects unauthenticated users away from protected routes.
+
+// middleware.js (root of onara-app/)
+
+import { createMiddlewareClient } from &apos;@supabase/auth-helpers-nextjs&apos;
+
+import { NextResponse } from &apos;next/server&apos;
+
+export async function middleware(req) {
+
+  const res = NextResponse.next()
+
+  const supabase = createMiddlewareClient({ req, res })
+
+  const { data: { session } } = await supabase.auth.getSession()
+
+  const { pathname } = req.nextUrl
+
+  const isProtected = pathname.startsWith(&apos;/dashboard&apos;)
+
+  const isAuth = pathname.startsWith(&apos;/login&apos;) || pathname.startsWith(&apos;/signup&apos;)
+
+  if (isProtected &amp;&amp; !session) {
+
+    return NextResponse.redirect(new URL(&apos;/login&apos;, req.url))
+
+  }
+
+  if (isAuth &amp;&amp; session) {
+
+    return NextResponse.redirect(new URL(&apos;/dashboard&apos;, req.url))
+
+  }
+
+  return res
+
+}
+
+export const config = {
+
+  matcher: [&apos;/dashboard/:path*&apos;, &apos;/login&apos;, &apos;/signup&apos;],
+
+}
+
+4.4  Dashboard Layout — Sidebar
+
+The dashboard uses a fixed left sidebar and a scrollable main area. Create app/dashboard/layout.jsx to wrap all dashboard pages with the sidebar.
+
+// app/dashboard/layout.jsx
+
+import Sidebar from &apos;@/components/Sidebar&apos;
+
+export default function DashboardLayout({ children }) {
+
+  return (
+
+    &lt;div className=&quot;flex min-h-screen bg-cream&quot;&gt;
+
+      &lt;Sidebar /&gt;
+
+      &lt;main className=&quot;flex-1 ml-60 p-8 overflow-y-auto&quot;&gt;
+
+        {children}
+
+      &lt;/main&gt;
+
+    &lt;/div&gt;
+
+  )
+
+}
+
+// components/Sidebar.jsx
+
+&apos;use client&apos;
+
+import Link from &apos;next/link&apos;
+
+import { usePathname } from &apos;next/navigation&apos;
+
+const navItems = [
+
+  { href: &apos;/dashboard/sites&apos;, label: &apos;My Sites&apos; },
+
+  { href: &apos;/dashboard/build&apos;, label: &apos;Build New Site&apos; },
+
+  { href: &apos;/dashboard/account&apos;, label: &apos;Account&apos; },
+
+]
+
+export default function Sidebar() {
+
+  const path = usePathname()
+
+  return (
+
+    &lt;aside className=&quot;fixed left-0 top-0 h-full w-60 bg-espresso flex flex-col py-8 px-4&quot;&gt;
+
+      &lt;span className=&quot;font-display text-2xl text-gold mb-10 px-2&quot;&gt;Onara&lt;/span&gt;
+
+      &lt;nav className=&quot;flex-1 space-y-1&quot;&gt;
+
+        {navItems.map(item =&gt; (
+
+          &lt;Link key={item.href} href={item.href}
+
+                className={`flex items-center px-4 py-3 rounded-lg text-sm font-medium
+
+                  ${path === item.href ? &apos;bg-midBrown text-gold border-l-2 border-gold&apos; : &apos;text-tan hover:text-gold&apos;}`}&gt;
+
+            {item.label}
+
+          &lt;/Link&gt;
+
+        ))}
+
+      &lt;/nav&gt;
+
+    &lt;/aside&gt;
+
+  )
+
+}
+
+Step 4 Verification Checklist
+
+Landing page accessible at localhost:3000 with all 5 sections rendering
+
+Sign up with Google OAuth works — redirects to /dashboard after auth
+
+Sign up with email and password works — user appears in Supabase auth.users and public.users
+
+Login works for both methods
+
+Visiting /dashboard without a session redirects to /login
+
+Visiting /login while logged in redirects to /dashboard
+
+Sidebar renders on all dashboard pages
+
+Pricing cards display correctly on both desktop and mobile
+
+STEP 5
+
+FastAPI Pipeline Server: Skeleton &amp; Queue
+
+Building the job queue, blackboard state, supervisor agent, and all pipeline infrastructure before implementing individual agents.
+
+Architecture of the Pipeline Server
+
+The FastAPI pipeline server is the brain of Onara. It receives generation requests from Next.js, manages a job queue so multiple users are handled safely, runs all ten agents sequentially, and returns validated code to the Next.js backend for deployment. Before implementing any agent logic, you need the infrastructure — the queue, the blackboard, the supervisor, and the job state management — to be solid.
+
+5.1  The Blackboard Pattern
+
+The Blackboard is a shared Python dictionary that every agent reads from and writes to. It is stored in FastAPI memory for the duration of a job and enables each agent to see all previous agent outputs without having to pass large data structures between function calls explicitly.
+
+# lib/blackboard.py
+
+def create_blackboard(job_id: str, business_data: dict, style_prefs: dict = {}) -&gt; dict:
+
+    &quot;&quot;&quot;Create a new blackboard for a pipeline job.&quot;&quot;&quot;
+
+    return {
+
+        &apos;job_id&apos;:          job_id,
+
+        &apos;business_data&apos;:   business_data,
+
+        &apos;style_prefs&apos;:     style_prefs,   # tone, color, layout, extra from UI
+
+        &apos;analyst_output&apos;:  {},
+
+        &apos;content_output&apos;:  {},
+
+        &apos;style_output&apos;:    {},
+
+        &apos;blueprint&apos;:       {},
+
+        &apos;prompt&apos;:          &apos;&apos;,
+
+        &apos;raw_code&apos;:        &apos;&apos;,
+
+        &apos;debugged_code&apos;:   &apos;&apos;,
+
+        &apos;seo_code&apos;:        &apos;&apos;,
+
+        &apos;qa_result&apos;:       {},          # Agent 9
+
+        &apos;qa_approved_code&apos;: &apos;&apos;,         # passed QA, fed to Agent 10
+
+        &apos;mobile_code&apos;:      &apos;&apos;,         # Agent 10 final output
+
+        &apos;errors&apos;:          [],
+
+        &apos;retries&apos;:         {},
+
+        &apos;active_agent&apos;:    None,
+
+        &apos;phase&apos;:           &apos;queued&apos;,
+
+    }
+
+5.2  The In-Memory Job Queue
+
+The queue is built on Python asyncio. It processes one job at a time and stores job states in a dictionary for status polling. A SQLite log provides recovery on crash.
+
+# main.py — complete queue implementation
+
+from fastapi import FastAPI, HTTPException, Header
+
+from fastapi.responses import StreamingResponse
+
+import asyncio, os, json, time, sqlite3
+
+from dotenv import load_dotenv
+
+from lib.blackboard import create_blackboard
+
+load_dotenv()
+
+app = FastAPI()
+
+# In-memory stores
+
+job_store: dict = {}          # job_id -&gt; blackboard
+
+pipeline_queue = asyncio.Queue()
+
+is_processing = False
+
+# SQLite for crash recovery
+
+conn = sqlite3.connect(&apos;jobs.db&apos;)
+
+conn.execute(&apos;&apos;&apos;CREATE TABLE IF NOT EXISTS jobs
+
+  (id TEXT PRIMARY KEY, status TEXT, created_at REAL)&apos;&apos;&apos;)
+
+def verify_secret(x_pipeline_secret: str = Header(None)):
+
+    if x_pipeline_secret != os.getenv(&quot;PIPELINE_SECRET&quot;):
+
+        raise HTTPException(status_code=401)
+
+async def process_next():
+
+    global is_processing
+
+    is_processing = True
+
+    while not pipeline_queue.empty():
+
+        job_id = await pipeline_queue.get()
+
+        bb = job_store[job_id]
+
+        bb[&apos;phase&apos;] = &apos;running&apos;
+
+        try:
+
+            from agents.pipeline import run_pipeline
+
+            await run_pipeline(bb)
+
+        except Exception as e:
+
+            bb[&apos;phase&apos;] = &apos;error&apos;
+
+            bb[&apos;errors&apos;].append(str(e))
+
+        conn.execute(&apos;UPDATE jobs SET status=? WHERE id=?&apos;, (bb[&apos;phase&apos;], job_id))
+
+        conn.commit()
+
+    is_processing = False
+
+@app.post(&quot;/pipeline/start&quot;)
+
+async def start_pipeline(body: dict, _=Depends(verify_secret)):
+
+    job_id = body[&quot;jobId&quot;]
+
+    bb = create_blackboard(job_id, body[&quot;businessData&quot;], body.get(&quot;stylePrefs&quot;, {}))
+
+    job_store[job_id] = bb
+
+    conn.execute(&apos;INSERT OR IGNORE INTO jobs VALUES (?,?,?)&apos;,
+
+                 (job_id, &apos;queued&apos;, time.time()))
+
+    conn.commit()
+
+    await pipeline_queue.put(job_id)
+
+    queue_size = pipeline_queue.qsize()
+
+    if not is_processing:
+
+        asyncio.create_task(process_next())
+
+    return {&quot;jobId&quot;: job_id, &quot;queuePosition&quot;: queue_size}
+
+@app.get(&quot;/pipeline/status/{job_id}&quot;)
+
+async def get_status(job_id: str, _=Depends(verify_secret)):
+
+    if job_id not in job_store:
+
+        raise HTTPException(status_code=404)
+
+    bb = job_store[job_id]
+
+    return {
+
+        &quot;phase&quot;:        bb[&quot;phase&quot;],
+
+        &quot;activeAgent&quot;:  bb[&quot;active_agent&quot;],
+
+        &quot;queuePosition&quot;: list(pipeline_queue._queue).index(job_id)
+
+                         if job_id in list(pipeline_queue._queue) else 0,
+
+        &quot;errors&quot;:       bb[&quot;errors&quot;],
+
+    }
+
+5.3  The Supervisor Agent
+
+The Supervisor runs after every agent completes and checks the latest output against the overall project goals. It catches errors before they propagate downstream, saving token usage and improving output quality. It uses the fast local llama3.3:8b model — free and adds minimal latency.
+
+# agents/supervisor.py
+
+from lib.ollama_client import ollama_local
+
+import json
+
+SUPERVISOR_PROMPT = &quot;&quot;&quot;
+
+You are a supervisor reviewing AI agent output for a website builder.
+
+Review the latest agent output against the overall project goals.
+
+Return ONLY valid JSON: {&quot;approved&quot;: true} or
+
+{&quot;approved&quot;: false, &quot;correction&quot;: &quot;specific instruction for re-run&quot;}
+
+Project goal: Build a complete website for {business_type} business.
+
+Agent that just ran: {agent_name}
+
+Agent output: {output}
+
+Previous outputs summary: {context}
+
+&quot;&quot;&quot;
+
+async def supervise(agent_name: str, output: dict, blackboard: dict) -&gt; dict:
+
+    prompt = SUPERVISOR_PROMPT.format(
+
+        business_type=blackboard[&apos;business_data&apos;].get(&apos;type&apos;, &apos;small business&apos;),
+
+        agent_name=agent_name,
+
+        output=json.dumps(output, indent=2)[:1000],  # truncate for token efficiency
+
+        context=json.dumps({k: blackboard[k] for k in
+
+            [&apos;analyst_output&apos;, &apos;content_output&apos;, &apos;style_output&apos;] if blackboard[k]}, indent=2)[:500]
+
+    )
+
+    response = await ollama_local(&quot;llama3.3:8b&quot;, prompt)
+
+    try:
+
+        return json.loads(response)
+
+    except:
+
+        return {&quot;approved&quot;: True}  # default approve on parse failure
+
+5.4  The Ollama Client Wrapper
+
+All AI calls go through ollama_client.py. Local models run on your PC. Cloud models use Ollama cloud free tier. Every cloud call auto-falls back to llama3.3:8b locally on rate limit or error.
+
+# lib/ollama_client.py
+
+import os
+
+from ollama import Client
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+OLLAMA_API_KEY   = os.getenv(&quot;OLLAMA_API_KEY&quot;)
+
+OLLAMA_LOCAL_URL = os.getenv(&quot;OLLAMA_LOCAL_URL&quot;, &quot;http://localhost:11434&quot;)
+
+# Local client — your PC on the network
+
+local_client = Client(host=OLLAMA_LOCAL_URL)
+
+# Cloud client — Ollama cloud free tier
+
+cloud_client = Client(
+
+    host=&quot;https://ollama.com&quot;,
+
+    headers={&quot;Authorization&quot;: f&quot;Bearer {OLLAMA_API_KEY}&quot;}
+
+)
+
+async def ollama_local(model: str, prompt: str) -&gt; str:
+
+    import asyncio
+
+    loop = asyncio.get_event_loop()
+
+    r = await loop.run_in_executor(None, lambda: local_client.chat(
+
+        model=model, messages=[{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: prompt}]))
+
+    return r.message.content
+
+async def ollama_cloud(model: str, prompt: str,
+
+                       fallback: str = &quot;llama3.3:8b&quot;) -&gt; str:
+
+    # Auto-falls back to local on rate limit or error
+
+    import asyncio
+
+    loop = asyncio.get_event_loop()
+
+    try:
+
+        r = await loop.run_in_executor(None, lambda: cloud_client.chat(
+
+            model=model, messages=[{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: prompt}]))
+
+        return r.message.content
+
+    except Exception as e:
+
+        print(f&quot;Cloud fallback to {fallback}: {e}&quot;)
+
+        return await ollama_local(fallback, prompt)
+
+5.5  Pipeline Orchestrator
+
+Create the main pipeline runner that calls all ten agents in sequence, runs the supervisor between each, handles parallelism for agents 2 and 3, and manages preloading.
+
+# agents/pipeline.py
+
+import asyncio
+
+from agents.supervisor import supervise
+
+from agents import analyst, content_writer, style_agent, planner
+
+from agents import prompt_engineer, code_generator, debugger, seo_agent, qa_agent, mobile_optimizer
+
+async def run_pipeline(blackboard: dict):
+
+    &quot;&quot;&quot;Run the full 10-agent pipeline with supervisor checks.&quot;&quot;&quot;
+
+    async def run_with_supervision(agent_fn, agent_name, *args, key=None):
+
+        for attempt in range(3):
+
+            blackboard[&quot;active_agent&quot;] = agent_name
+
+            result = await agent_fn(blackboard)
+
+            review = await supervise(agent_name, result, blackboard)
+
+            if review[&quot;approved&quot;]:
+
+                if key: blackboard[key] = result
+
+                return result
+
+            # Re-run with correction injected into blackboard
+
+            blackboard[&quot;supervisor_correction&quot;] = review[&quot;correction&quot;]
+
+        raise RuntimeError(f&quot;{agent_name} failed supervisor after 3 attempts&quot;)
+
+    # Agent 1: Business Analyst
+
+    await run_with_supervision(analyst.run, &quot;Business Analyst&quot;, key=&quot;analyst_output&quot;)
+
+    # Agents 2 + 3: Run in parallel
+
+    content, style = await asyncio.gather(
+
+        content_writer.run(blackboard),
+
+        style_agent.run(blackboard)
+
+    )
+
+    blackboard[&quot;content_output&quot;] = content
+
+    blackboard[&quot;style_output&quot;] = style
+
+    # Agents 4-9: Sequential
+
+    await run_with_supervision(planner.run, &quot;Planner&quot;, key=&quot;blueprint&quot;)
+
+    await run_with_supervision(prompt_engineer.run, &quot;Prompt Engineer&quot;, key=&quot;prompt&quot;)
+
+    await run_with_supervision(code_generator.run, &quot;Code Generator&quot;, key=&quot;raw_code&quot;)
+
+    await run_with_supervision(debugger.run, &quot;Debugger&quot;, key=&quot;debugged_code&quot;)
+
+    await run_with_supervision(seo_agent.run, &quot;SEO Agent&quot;, key=&quot;seo_code&quot;)
+
+    result = await qa_agent.run(blackboard)
+
+    blackboard[&quot;qa_result&quot;] = result
+
+    blackboard[&quot;qa_approved_code&quot;] = blackboard[&quot;seo_code&quot;]
+
+    if not result.get(&quot;approved&quot;):
+
+        raise RuntimeError(f&quot;QA failed: {result.get(&apos;issues&apos;, [])}&quot;)
+
+    # Agent 10: Mobile Optimization (final pass)
+
+    blackboard[&quot;active_agent&quot;] = &quot;Mobile Optimizer&quot;
+
+    await mobile_optimizer.run(blackboard)
+
+    blackboard[&quot;phase&quot;] = &quot;done&quot;
+
+Step 5 Verification Checklist
+
+blackboard.py creates correct dictionary structure
+
+Queue correctly accepts jobs and processes them in order
+
+Job status endpoint returns correct phase, activeAgent, and queuePosition
+
+Supervisor agent calls Ollama local and returns approved JSON
+
+ollama_client.py: ollama_cloud() successfully calls gpt-oss:20b-cloud and returns text
+
+ollama_client.py: rate limit fallback tested — disconnect from internet and confirm local llama3.3:8b fires automatically
+
+Pipeline orchestrator imports all agents without error
+
+POST /pipeline/start returns jobId and queuePosition
+
+GET /pipeline/status/{jobId} returns live status updates
+
+STEP 6
+
+The 10-Agent AI Pipeline: Full Implementation
+
+Writing every agent — analyst, content writer, style, planner, prompt engineer, code generator, debugger, SEO, QA, and mobile optimizer — with RAG integration for agents 7 and 9.
+
+Agent Implementation Strategy
+
+Onara uses 10 agents in sequence — each with one specific job. The first 5 handle analysis and planning, Agent 6 generates the code via GitHub Copilot SDK, and Agents 7-10 debug, optimize, and validate. The most important part of any agent is the system prompt — it determines output quality more than anything else.
+
+Model Summary
+
+Cloud (Ollama free tier): Agents 1=gpt-oss:20b, 4=glm-5.1, 5=glm-5.1, 7=minimax-m2.7, 9=minimax-m2.5. Local (on your PC): Agents 2, 3, 8, 10=qwen3:8b. Supervisor=llama3.3:8b. Agent 6=GitHub Copilot SDK (free). All cloud agents fall back to llama3.3:8b locally on rate limit.
+
+6.1  Agent 1 — Business Analyst
+
+The Business Analyst determines the industry-specific requirements for this website. A plumber needs an emergency call banner; a photographer needs a gallery; a food truck needs a menu. This shapes everything downstream.
+
+# agents/analyst.py
+
+from lib.ollama_client import ollama_cloud
+
+import json
+
+SYSTEM_PROMPT = &quot;&quot;&quot;
+
+You are a website strategy expert specializing in small business websites.
+
+Analyze the business data and return a JSON object with these exact keys:
+
+{
+
+  &quot;industryType&quot;: &quot;category like plumber/restaurant/photographer/etc&quot;,
+
+  &quot;mustHaveSections&quot;: [&quot;hero&quot;, &quot;services&quot;, &quot;contact&quot;, ...],
+
+  &quot;callToActionType&quot;: &quot;call_now|book_appointment|order_online|view_portfolio&quot;,
+
+  &quot;urgencyLevel&quot;: &quot;high|medium|low&quot;,
+
+  &quot;specialFeatures&quot;: [&quot;menu&quot;, &quot;gallery&quot;, &quot;emergency_callout&quot;, &quot;booking&quot;, ...]
+
+}
+
+Return ONLY valid JSON. No markdown, no explanation.
+
+&quot;&quot;&quot;
+
+async def run(blackboard: dict) -&gt; dict:
+
+    bd = blackboard[&quot;business_data&quot;]
+
+    sp = blackboard.get(&quot;style_prefs&quot;, {})
+
+    prompt = f&quot;&quot;&quot;{SYSTEM_PROMPT}
+
+Business data:
+
+Name: {bd.get(&quot;name&quot;)}
+
+Type: {bd.get(&quot;type&quot;)}
+
+Description: {bd.get(&quot;description&quot;, &quot;&quot;)}
+
+Services: {&quot;, &quot;.join(bd.get(&quot;services&quot;, []))}
+
+Style preferences: tone={sp.get(&quot;tone&quot;,&quot;&quot;)}, color={sp.get(&quot;color&quot;,&quot;&quot;)}, layout={sp.get(&quot;layout&quot;,&quot;&quot;)}
+
+Extra context: {sp.get(&quot;extra&quot;, blackboard.get(&quot;extra_context&quot;, &quot;&quot;))}
+
+&quot;&quot;&quot;
+
+    response = await ollama_cloud(&quot;gpt-oss:20b-cloud&quot;, prompt)
+
+    return json.loads(response.strip())
+
+6.2  Agent 2 — Content Writer (Parallel)
+
+# agents/content_writer.py
+
+from lib.ollama_client import ollama_local
+
+import json
+
+SYSTEM_PROMPT = &quot;&quot;&quot;
+
+You write conversion-focused website copy for small businesses.
+
+Write all copy for this website and return JSON:
+
+{
+
+  &quot;heroHeadline&quot;: &quot;compelling headline under 10 words&quot;,
+
+  &quot;heroSub&quot;: &quot;one sentence subheadline&quot;,
+
+  &quot;aboutText&quot;: &quot;2-3 sentences about the business&quot;,
+
+  &quot;services&quot;: [{&quot;name&quot;: &quot;...&quot;, &quot;description&quot;: &quot;one sentence&quot;}],
+
+  &quot;contactInstructions&quot;: &quot;how to get in touch&quot;,
+
+  &quot;footerTagline&quot;: &quot;short tagline&quot;
+
+}
+
+Use the real business name, real services, real tone.
+
+If urgencyLevel is high, use action-oriented language.
+
+Return ONLY valid JSON.
+
+&quot;&quot;&quot;
+
+async def run(blackboard: dict) -&gt; dict:
+
+    bd = blackboard[&quot;business_data&quot;]
+
+    ao = blackboard[&quot;analyst_output&quot;]
+
+    prompt = f&quot;&quot;&quot;{SYSTEM_PROMPT}
+
+Business: {bd.get(&quot;name&quot;)} ({ao.get(&quot;industryType&quot;)})
+
+Services: {&quot;, &quot;.join(bd.get(&quot;services&quot;, []))}
+
+Phone: {bd.get(&quot;phone&quot;)}
+
+Urgency: {ao.get(&quot;urgencyLevel&quot;)}
+
+CTA type: {ao.get(&quot;callToActionType&quot;)}
+
+&quot;&quot;&quot;
+
+    response = await ollama_local(&quot;qwen3:8b&quot;, prompt)
+
+    return json.loads(response.strip())
+
+6.3  Agent 3 — Style Agent (Parallel)
+
+# agents/style_agent.py
+
+from lib.ollama_client import ollama_local
+
+import json
+
+INDUSTRY_DEFAULTS = {
+
+    &quot;plumber&quot;:      {&quot;primaryColor&quot;: &quot;#1A3A5C&quot;, &quot;tone&quot;: &quot;professional&quot;},
+
+    &quot;restaurant&quot;:   {&quot;primaryColor&quot;: &quot;#8B1A1A&quot;, &quot;tone&quot;: &quot;warm&quot;},
+
+    &quot;photographer&quot;: {&quot;primaryColor&quot;: &quot;#2C2C2C&quot;, &quot;tone&quot;: &quot;minimal&quot;},
+
+    &quot;landscaper&quot;:   {&quot;primaryColor&quot;: &quot;#2D5016&quot;, &quot;tone&quot;: &quot;earthy&quot;},
+
+    &quot;bakery&quot;:       {&quot;primaryColor&quot;: &quot;#C4813A&quot;, &quot;tone&quot;: &quot;warm&quot;},
+
+}
+
+async def run(blackboard: dict) -&gt; dict:
+
+    industry = blackboard[&quot;analyst_output&quot;].get(&quot;industryType&quot;, &quot;general&quot;)
+
+    sp = blackboard.get(&quot;style_prefs&quot;, {})
+
+    defaults = INDUSTRY_DEFAULTS.get(industry, {&quot;primaryColor&quot;: &quot;#2C3E50&quot;, &quot;tone&quot;: &quot;professional&quot;})
+
+    # User preferences override industry defaults when provided
+
+    tone_hint  = f&apos;User prefers {sp[&quot;tone&quot;]} tone.&apos; if sp.get(&quot;tone&quot;) else &quot;&quot;
+
+    color_hint = f&apos;User prefers {sp[&quot;color&quot;]} color style.&apos; if sp.get(&quot;color&quot;) and sp[&quot;color&quot;] != &quot;Auto (from industry)&quot; else &quot;&quot;
+
+    layout_hint= f&apos;User prefers {sp[&quot;layout&quot;]} layout.&apos; if sp.get(&quot;layout&quot;) else &quot;&quot;
+
+    prompt = f&quot;&quot;&quot;
+
+Design a color palette and typography for a {industry} small business website.
+
+Return JSON with these exact keys:
+
+{{ &quot;primaryColor&quot;: &quot;#hex&quot;, &quot;secondaryColor&quot;: &quot;#hex&quot;, &quot;accentColor&quot;: &quot;#hex&quot;,
+
+   &quot;headingFont&quot;: &quot;font name&quot;, &quot;bodyFont&quot;: &quot;font name&quot;,
+
+   &quot;layoutStyle&quot;: &quot;modern|classic|bold|minimal&quot;,
+
+   &quot;borderRadius&quot;: &quot;none|soft|rounded&quot;,
+
+   &quot;buttonStyle&quot;: &quot;solid|outline|gradient&quot; }}
+
+Industry defaults to guide you: {json.dumps(defaults)}
+
+User style preferences (override defaults if provided): {tone_hint} {color_hint} {layout_hint}
+
+Return ONLY valid JSON.
+
+&quot;&quot;&quot;
+
+    response = await ollama_local(&quot;qwen3:8b&quot;, prompt)
+
+    return json.loads(response.strip())
+
+6.4  Agents 4 and 5 — Planner and Prompt Engineer
+
+# agents/planner.py
+
+from lib.ollama_client import ollama_cloud
+
+import json
+
+async def run(blackboard: dict) -&gt; dict:
+
+    ao = blackboard[&quot;analyst_output&quot;]
+
+    co = blackboard[&quot;content_output&quot;]
+
+    so = blackboard[&quot;style_output&quot;]
+
+    prompt = f&quot;&quot;&quot;
+
+You are a senior web architect. Merge these three outputs into one unified site blueprint.
+
+Analyst output: {json.dumps(ao)}
+
+Content output: {json.dumps(co)}
+
+Style output: {json.dumps(so)}
+
+Return a complete blueprint JSON:
+
+{{ &quot;sections&quot;: [{{&quot;id&quot;: &quot;hero&quot;, &quot;content&quot;: {{...}}, &quot;style&quot;: {{...}} }}, ...],
+
+   &quot;globalStyle&quot;: {{...}}, &quot;meta&quot;: {{...}} }}
+
+Return ONLY valid JSON.
+
+&quot;&quot;&quot;
+
+    response = await ollama_cloud(&quot;glm-5.1:cloud&quot;, prompt)
+
+    return json.loads(response.strip())
+
+# agents/prompt_engineer.py
+
+from lib.ollama_client import ollama_cloud
+
+import json
+
+async def run(blackboard: dict) -&gt; dict:
+
+    blueprint = blackboard[&quot;blueprint&quot;]
+
+    prompt = f&quot;&quot;&quot;
+
+Convert this site blueprint into a precise Copilot generation prompt.
+
+The prompt must:
+
+- Specify every section by name
+
+- Include all colors as exact hex values
+
+- Include all font names
+
+- Specify the exact file marker format:
+
+  &lt;!-- index.html --&gt; for HTML, /* style.css */ for CSS, // script.js for JS
+
+- Require no external dependencies, no markdown, no explanations
+
+- All CSS inline in style.css, all JS in script.js
+
+Blueprint: {json.dumps(blueprint, indent=2)}
+
+Return ONLY the generation prompt string, no JSON wrapper.
+
+&quot;&quot;&quot;
+
+    response = await ollama_cloud(&quot;glm-5.1:cloud&quot;, prompt)
+
+    return response.strip()
+
+6.5  Agent 6 — Code Generator
+
+Agent 6 uses the GitHub Copilot SDK as the primary model — completely free via GitHub Education. If Copilot fails or times out, it falls back to Ollama Cloud gpt-oss:20b-cloud, then to local qwen3:8b if cloud is also unavailable. The SYSTEM prompt is passed through all three — the rest of the pipeline is unaffected regardless of which generates the code.
+
+# agents/code_generator.py
+
+from lib.copilot_client import copilot_sdk_generate
+
+from lib.ollama_client import ollama_cloud, ollama_local
+
+SYSTEM = (&quot;&quot;&quot;
+
+You are an expert HTML/CSS/JS developer.
+
+Generate a COMPLETE, functional small business website as THREE sections.
+
+Use EXACTLY these markers — no markdown fences, no explanation:
+
+&lt;!-- index.html --&gt;
+
+[complete HTML here]
+
+/* style.css */
+
+[complete CSS here]
+
+// script.js
+
+[complete JS here]
+
+Requirements:
+
+- No external dependencies (no Bootstrap, no jQuery)
+
+- All CSS in style.css, all JS in script.js
+
+- Fully responsive — @media breakpoints at 768px and 480px
+
+- All touch targets minimum 44x44px
+
+- Real business data in all content — no placeholder text
+
+&quot;&quot;&quot;)
+
+async def run(blackboard: dict) -&gt; str:
+
+    prompt = blackboard[&quot;prompt&quot;]
+
+    # Primary: GitHub Copilot SDK (free via student plan, best code output)
+
+    # Fallback 1: Ollama Cloud gpt-oss:20b-cloud if Copilot fails/times out
+
+    # Fallback 2: Local qwen3:8b if cloud also unavailable
+
+    try:
+
+        return await copilot_sdk_generate(prompt)  # PRIMARY: free via GitHub Education
+
+    except Exception:
+
+        try:
+
+            return await ollama_cloud(&quot;gpt-oss:20b-cloud&quot;, prompt)  # FALLBACK 1: Ollama cloud
+
+        except Exception:
+
+            return await ollama_local(&quot;qwen3:8b&quot;, prompt)  # FALLBACK 2: local
+
+6.6  RAG Setup for Agents 7 and 9
+
+Set up the ChromaDB vector database and populate it with HTML/CSS/JS patterns before implementing the Debugger and QA agents. This is a one-time setup that runs when the server starts.
+
+# rag/vector_store.py
+
+import chromadb
+
+from sentence_transformers import SentenceTransformer
+
+from rank_bm25 import BM25Okapi
+
+model = SentenceTransformer(&quot;all-MiniLM-L6-v2&quot;)
+
+client = chromadb.PersistentClient(path=os.getenv(&quot;CHROMA_PATH&quot;, &quot;./chroma_db&quot;))  # persistent, not in-memory
+
+def get_collection():
+
+    return client.get_or_create_collection(&quot;onara-patterns&quot;)
+
+def embed_documents(docs: list[dict]):
+
+    &quot;&quot;&quot;docs is list of {id, content, metadata}&quot;&quot;&quot;
+
+    collection = get_collection()
+
+    embeddings = model.encode([d[&quot;content&quot;] for d in docs]).tolist()
+
+    collection.add(
+
+        ids=[d[&quot;id&quot;] for d in docs],
+
+        documents=[d[&quot;content&quot;] for d in docs],
+
+        embeddings=embeddings,
+
+        metadatas=[d.get(&quot;metadata&quot;, {}) for d in docs],
+
+    )
+
+def hybrid_search(query: str, n_results: int = 3) -&gt; list[str]:
+
+    collection = get_collection()
+
+    embedding = model.encode(query).tolist()
+
+    vector_results = collection.query(
+
+        query_embeddings=[embedding], n_results=n_results * 2
+
+    )
+
+    docs = vector_results[&quot;documents&quot;][0]
+
+    if not docs: return []
+
+    # BM25 reranking
+
+    tokenized = [d.split() for d in docs]
+
+    bm25 = BM25Okapi(tokenized)
+
+    scores = bm25.get_scores(query.split())
+
+    ranked = sorted(zip(docs, scores), key=lambda x: x[1], reverse=True)
+
+    return [d for d, _ in ranked[:n_results]]
+
+Create the RAG documents file with HTML/CSS patterns:
+
+# rag/embedder.py — run once at startup
+
+from rag.vector_store import embed_documents
+
+RAG_DOCS = [
+
+  {&quot;id&quot;: &quot;nav-pattern&quot;, &quot;content&quot;: &quot;Navigation HTML pattern: sticky navbar with logo left, links center, CTA right. Use position:fixed, z-index:100, background with shadow on scroll.&quot;},
+
+  {&quot;id&quot;: &quot;hero-pattern&quot;, &quot;content&quot;: &quot;Hero section pattern: full-width, centered content, large H1, subtext, CTA button. Use flexbox, min-height:100vh or padding:120px.&quot;},
+
+  {&quot;id&quot;: &quot;responsive-grid&quot;, &quot;content&quot;: &quot;Responsive grid pattern: display:grid, grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)), gap:2rem. Cards go from 3-col to 1-col automatically.&quot;},
+
+  {&quot;id&quot;: &quot;media-query&quot;, &quot;content&quot;: &quot;Mobile responsive breakpoint: @media (max-width: 768px). Stack flex items: flex-direction:column. Full-width buttons: width:100%.&quot;},
+
+  {&quot;id&quot;: &quot;jsonld-schema&quot;, &quot;content&quot;: &quot;JSON-LD LocalBusiness schema: type:LocalBusiness, name, address:{streetAddress,city,state,postalCode}, telephone, openingHours array.&quot;},
+
+  {&quot;id&quot;: &quot;meta-seo&quot;, &quot;content&quot;: &quot;SEO meta tags: title tag, meta description max 160 chars, og:title, og:description, og:image, canonical link, viewport meta tag.&quot;},
+
+  {&quot;id&quot;: &quot;contact-form&quot;, &quot;content&quot;: &quot;Contact section pattern: address with icon, phone with click-to-call tel: link, email with mailto: link, optional form with name/email/message.&quot;},
+
+  {&quot;id&quot;: &quot;image-alt&quot;, &quot;content&quot;: &quot;All img tags must have descriptive alt text. Format: alt=&apos;Business name service description&apos;. Empty alt is invalid for content images.&quot;},
+
+  {&quot;id&quot;: &quot;css-vars&quot;, &quot;content&quot;: &quot;CSS custom properties: :root { --primary: #hex; --secondary: #hex; --text: #hex; } Use var(--primary) throughout for consistent theming.&quot;},
+
+  {&quot;id&quot;: &quot;file-markers&quot;, &quot;content&quot;: &quot;File markers format: &lt;!-- index.html --&gt; starts HTML section. /* style.css */ starts CSS section. // script.js starts JS section. All three must be present.&quot;},
+
+]
+
+def initialize_rag():
+
+    embed_documents(RAG_DOCS)
+
+    print(f&quot;RAG initialized with {len(RAG_DOCS)} documents&quot;)
+
+6.7  Agent 7 — Debugger with RAG
+
+# agents/debugger.py
+
+from lib.ollama_client import ollama_cloud
+
+from rag.vector_store import hybrid_search
+
+import json
+
+async def run(blackboard: dict) -&gt; str:
+
+    code = blackboard[&quot;raw_code&quot;]
+
+    # Check for common issues first
+
+    issues = []
+
+    if &quot;&lt;!-- index.html --&gt;&quot; not in code: issues.append(&quot;missing index.html marker&quot;)
+
+    if &quot;/* style.css */&quot; not in code: issues.append(&quot;missing style.css marker&quot;)
+
+    if &quot;// script.js&quot; not in code: issues.append(&quot;missing script.js marker&quot;)
+
+    # Get RAG context for issues found
+
+    rag_context = &quot;&quot;
+
+    if issues:
+
+        for issue in issues:
+
+            docs = hybrid_search(issue)
+
+            rag_context += &quot;\n&quot;.join(docs[:2])
+
+    prompt = f&quot;&quot;&quot;
+
+You are an expert HTML/CSS/JS debugger.
+
+Fix ALL issues in this website code.
+
+Known issues detected: {issues}
+
+Reference patterns: {rag_context}
+
+IMPORTANT: Return the COMPLETE fixed code with all three file markers intact.
+
+After the code, add a JSON comment: // DEBUG_RESULT
+
+{{ &quot;valid&quot;: true/false, &quot;issuesFound&quot;: [], &quot;issuesFixed&quot;: [] }}
+
+Code to fix:
+
+{code[:8000]}
+
+&quot;&quot;&quot;
+
+    return await ollama_cloud(&quot;minimax-m2.7:cloud&quot;, prompt)
+
+6.8  Agents 8 and 9 — SEO and QA
+
+# agents/seo_agent.py
+
+from lib.ollama_client import ollama_local
+
+async def run(blackboard: dict) -&gt; str:
+
+    code = blackboard[&quot;debugged_code&quot;]
+
+    bd = blackboard[&quot;business_data&quot;]
+
+    prompt = f&quot;&quot;&quot;
+
+Add SEO to this HTML. Inject ONLY into the &lt;head&gt; section:
+
+1. &lt;title&gt;{bd.get(&quot;name&quot;)} | {bd.get(&quot;type&quot;, &quot;Local Business&quot;)}&lt;/title&gt;
+
+2. &lt;meta name=&quot;description&quot; content=&quot;...max 160 chars...&quot;&gt;
+
+3. Open Graph tags: og:title, og:description, og:type
+
+4. JSON-LD LocalBusiness schema with real name/address/phone/hours
+
+5. &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+
+6. Ensure all &lt;img&gt; tags have descriptive alt attributes
+
+Business data: Name={bd.get(&quot;name&quot;)}, Address={bd.get(&quot;address&quot;)},
+
+Phone={bd.get(&quot;phone&quot;)}, Hours={bd.get(&quot;hours&quot;)}
+
+Return the COMPLETE HTML with SEO injected. CSS and JS sections unchanged.
+
+{code[:8000]}
+
+&quot;&quot;&quot;
+
+    return await ollama_local(&quot;qwen3:8b&quot;, prompt)
+
+# agents/qa_agent.py
+
+from lib.ollama_client import ollama_cloud
+
+from rag.vector_store import hybrid_search
+
+import json
+
+async def run(blackboard: dict) -&gt; dict:
+
+    code = blackboard[&quot;seo_code&quot;]
+
+    bd = blackboard[&quot;business_data&quot;]
+
+    rag_docs = hybrid_search(&quot;HTML CSS quality checklist mobile responsive&quot;, n_results=3)
+
+    prompt = f&quot;&quot;&quot;
+
+Perform final QA on this website. Check:
+
+1. All three file markers present and parseable
+
+2. Contact info matches: phone={bd.get(&quot;phone&quot;)}, address={bd.get(&quot;address&quot;)}
+
+3. Mobile media queries exist (@media max-width)
+
+4. No Lorem Ipsum text
+
+5. No broken image src attributes (no placeholder.jpg)
+
+6. JSON-LD schema present
+
+7. Meta description present
+
+QA standards: {&quot; &quot;.join(rag_docs)}
+
+Return JSON: {{ &quot;approved&quot;: true/false, &quot;issues&quot;: [&quot;list of any failures&quot;] }}
+
+{code[:6000]}
+
+&quot;&quot;&quot;
+
+    response = await ollama_cloud(&quot;minimax-m2.5:cloud&quot;, prompt)
+
+    return json.loads(response.strip())
+
+6.9  Agent 10 — Mobile Optimization
+
+Agent 10 runs after QA approval and focuses exclusively on mobile experience. It audits the generated site for touch targets, viewport behaviour, font sizes, and layout at 375px (iPhone SE), 390px (iPhone 14), and 414px widths. It fixes issues in place and returns the final production-ready code. This is the last agent before the backend deployment chain begins.
+
+# agents/mobile_optimizer.py
+
+from lib.ollama_client import ollama_local
+
+MOBILE_CHECKS = &quot;&quot;&quot;
+
+Audit and fix this website for mobile devices. Check and fix ALL of:
+
+1. Viewport meta tag: &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+
+2. Touch targets: all buttons and links must be at least 44x44px
+
+3. Font sizes: body text minimum 16px (prevents iOS auto-zoom on inputs)
+
+4. Input fields: font-size must be &gt;= 16px (prevents iOS zoom)
+
+5. Horizontal overflow: no element wider than 100vw, no fixed pixel widths &gt; 390px
+
+6. Tap spacing: interactive elements need at least 8px gap between them
+
+7. Images: all img tags must have max-width:100% and height:auto
+
+8. Nav menu: must collapse on mobile (hamburger or stacked)
+
+9. CTA button: must be full width on mobile (width:100%)
+
+10. Media queries: must have @media (max-width:768px) and @media (max-width:480px)
+
+Return the COMPLETE fixed code with all three file markers intact.
+
+After the code add: // MOBILE_RESULT {&quot;fixed&quot;: [...list of fixes made...]}
+
+&quot;&quot;&quot;
+
+async def run(blackboard: dict) -&gt; str:
+
+    code = blackboard[&quot;qa_approved_code&quot;]
+
+    prompt = MOBILE_CHECKS + f&quot;\n\nCode to optimize:\n{code[:8000]}&quot;
+
+    result = await ollama_local(&quot;qwen3:8b&quot;, prompt)
+
+    blackboard[&quot;mobile_optimized_code&quot;] = result
+
+    return result
+
+All ten agent files exist and import without errors
+
+Agent 1 returns valid JSON with industryType, mustHaveSections, callToActionType
+
+Agents 2 and 3 run in parallel and both return valid JSON
+
+Agent 4 blueprint merges all three previous outputs correctly
+
+Agent 6 produces code with all three file markers
+
+RAG vector store initializes with all 10 documents
+
+Agent 7 correctly identifies and fixes missing file markers
+
+Agent 8 injects meta tags and JSON-LD into the HTML head
+
+Agent 9 returns {approved: true} for valid generated code
+
+Agent 10 returns mobile-optimized code with all touch targets &gt;= 44px and no horizontal overflow
+
+Full pipeline runs end-to-end with a test business (test with a local pizza restaurant)
+
+STEP 7
+
+Next.js Dashboard: Build Flow &amp; My Sites
+
+Building the 4-step site generation flow, the My Sites grid, real-time agent progress view, and all supporting API routes in Next.js.
+
+Overview of the Dashboard
+
+The dashboard is the core user experience of Onara. It has three main areas: the Build flow (4 steps from Google import to live site), My Sites (a grid of all generated sites), and Account settings. This step focuses on the Build flow and My Sites, which are the highest-priority features for getting to a working product.
+
+7.1  How the Business Search Works — Google Places API
+
+The user types their business name into Step 1 of the build flow. That string is sent to /api/places which calls the Google Places Text Search API. The API returns the best matching business with its full profile — name, address, phone, hours, photos, and type. If any fields are missing (e.g. no phone number on file), Onara highlights them in amber and lets the user fill them in manually before continuing. This is the only required user input before generation.
+
+What the user actually does
+
+User types: &quot;Mikes Pizza Austin TX&quot; (or just &quot;Mikes Pizza&quot; — the API handles partial names)
+
+Onara calls Places API → returns the matching Google Business listing
+
+User sees a confirmation card with their real name, address, phone, hours, and photo
+
+Missing fields show an amber badge and an editable input inline
+
+User clicks Confirm and Continue → generation starts
+
+7.2  The /api/places Route — Implementation
+
+// app/api/places/route.js
+
+import { NextResponse } from &apos;next/server&apos;
+
+const PLACES_KEY = process.env.GOOGLE_PLACES_API_KEY
+
+export async function GET(req) {
+
+  const { searchParams } = new URL(req.url)
+
+  const q = searchParams.get(&apos;q&apos;)
+
+  if (!q) return NextResponse.json({ error: &apos;Missing query&apos; }, { status: 400 })
+
+  const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}&amp;key=${PLACES_KEY}`
+
+  const searchRes = await fetch(searchUrl)
+
+  const searchData = await searchRes.json()
+
+  if (!searchData.results?.length) {
+
+    return NextResponse.json({ found: false })
+
+  }
+
+  const place = searchData.results[0]
+
+  const detailUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&amp;fields=name,formatted_address,formatted_phone_number,opening_hours,photos,website,types&amp;key=${PLACES_KEY}`
+
+  const detailRes = await fetch(detailUrl)
+
+  const detail = await detailRes.json()
+
+  const p = detail.result
+
+  // Identify missing fields
+
+  const missing = []
+
+  if (!p.formatted_phone_number) missing.push(&apos;phone&apos;)
+
+  if (!p.opening_hours) missing.push(&apos;hours&apos;)
+
+  return NextResponse.json({
+
+    found: true,
+
+    data: {
+
+      name: p.name,
+
+      address: p.formatted_address,
+
+      phone: p.formatted_phone_number || null,
+
+      hours: p.opening_hours?.weekday_text || null,
+
+      photos: p.photos?.slice(0, 3).map(ph =&gt; `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&amp;photoreference=${ph.photo_reference}&amp;key=${PLACES_KEY}`) || [],
+
+      types: p.types || [],
+
+    },
+
+    missing,
+
+  })
+
+}
+
+7.3  The /api/sites Route — Generate and Status
+
+// app/api/sites/route.js
+
+import { NextResponse } from &apos;next/server&apos;
+
+import { getServiceClient } from &apos;@/lib/supabase&apos;
+
+import { createClient } from &apos;@supabase/supabase-js&apos;
+
+import crypto from &apos;crypto&apos;
+
+const PIPELINE_URL = process.env.PIPELINE_SERVER_URL
+
+const PIPELINE_SECRET = process.env.PIPELINE_SECRET
+
+export async function POST(req) {
+
+  const supabase = getServiceClient()
+
+  const { data: { user } } = await supabase.auth.getUser(
+
+    req.headers.get(&apos;Authorization&apos;)?.replace(&apos;Bearer &apos;, &apos;&apos;)
+
+  )
+
+  if (!user) return NextResponse.json({ error: &apos;Unauthorized&apos; }, { status: 401 })
+
+  const body = await req.json()
+
+  const jobId = crypto.randomBytes(16).toString(&apos;hex&apos;)
+
+  // Forward to FastAPI pipeline
+
+  const pipelineRes = await fetch(`${PIPELINE_URL}/pipeline/start`, {
+
+    method: &apos;POST&apos;,
+
+    headers: { &apos;Content-Type&apos;: &apos;application/json&apos;, &apos;x-pipeline-secret&apos;: PIPELINE_SECRET },
+
+    body: JSON.stringify({ jobId, businessData: body.businessData, extraContext: body.extraContext, stylePrefs: body.stylePrefs }),
+
+  })
+
+  if (!pipelineRes.ok) return NextResponse.json({ error: &apos;Pipeline error&apos; }, { status: 500 })
+
+  const { queuePosition } = await pipelineRes.json()
+
+  // Create project record in Supabase
+
+  await supabase.from(&apos;projects&apos;).insert({
+
+    user_id: user.id,
+
+    project_id: jobId,
+
+    business_name: body.businessData.name,
+
+    status: &apos;generating&apos;,
+
+  })
+
+  return NextResponse.json({ jobId, queuePosition })
+
+}
+
+7.4  Build Step 1 — Google Import UI
+
+The build flow has three sub-steps before generation starts: (1) the user searches for their business, (2) they see a confirmation card with their Google data and can fill in any missing fields, (3) a second card appears asking for style preferences and extra context. Only after all three does the Generate button appear.
+
+// app/dashboard/build/page.jsx
+
+&apos;use client&apos;
+
+import { useState } from &apos;react&apos;
+
+const STYLE_OPTIONS = {
+
+  tone:   [&apos;Professional&apos;, &apos;Friendly&apos;, &apos;Bold&apos;, &apos;Minimal&apos;, &apos;Luxurious&apos;],
+
+  color:  [&apos;Auto (from industry)&apos;, &apos;Dark&apos;, &apos;Light&apos;, &apos;Vibrant&apos;, &apos;Earthy&apos;, &apos;Custom...&apos;],
+
+  layout: [&apos;Modern&apos;, &apos;Classic&apos;, &apos;Bold &amp; Graphic&apos;, &apos;Clean &amp; Simple&apos;],
+
+}
+
+export default function BuildPage() {
+
+  const [step, setStep]           = useState(1)
+
+  const [query, setQuery]         = useState(&apos;&apos;)
+
+  const [business, setBusiness]   = useState(null)
+
+  const [missing, setMissing]     = useState({})
+
+  const [stylePrefs, setStylePrefs] = useState({ tone: &apos;&apos;, color: &apos;&apos;, layout: &apos;&apos;, extra: &apos;&apos; })
+
+  const [loading, setLoading]     = useState(false)
+
+  const [jobId, setJobId]         = useState(null)
+
+  // ── Step 1: Search ──────────────────────────────────────────────
+
+  async function searchBusiness() {
+
+    setLoading(true)
+
+    const res  = await fetch(`/api/places?q=${encodeURIComponent(query)}`)
+
+    const data = await res.json()
+
+    if (data.found) { setBusiness(data.data); setMissing({}); setStep(2) }
+
+    setLoading(false)
+
+  }
+
+  // ── Step 3: Generate ────────────────────────────────────────────
+
+  async function generate() {
+
+    setLoading(true)
+
+    const merged = { ...business, ...missing }
+
+    const res = await fetch(&apos;/api/sites&apos;, {
+
+      method: &apos;POST&apos;,
+
+      headers: { &apos;Content-Type&apos;: &apos;application/json&apos;,
+
+                 Authorization: `Bearer ${(await supabase.auth.getSession()).data.session.access_token}` },
+
+      body: JSON.stringify({ businessData: merged, stylePrefs }),
+
+    })
+
+    const { jobId } = await res.json()
+
+    setJobId(jobId)
+
+    setStep(4)  // agent progress view
+
+    setLoading(false)
+
+  }
+
+  // ── Step 1: Search Input ─────────────────────────────────────────
+
+  if (step === 1) return (
+
+    &lt;div className=&quot;max-w-xl mx-auto mt-16&quot;&gt;
+
+      &lt;h1 className=&quot;text-2xl font-bold text-espresso mb-2&quot;&gt;Where is your business on Google?&lt;/h1&gt;
+
+      &lt;p className=&quot;text-tan mb-6&quot;&gt;Type your business name as it appears on Google Maps.&lt;/p&gt;
+
+      &lt;input value={query} onChange={e =&gt; setQuery(e.target.value)}
+
+             onKeyDown={e =&gt; e.key === &apos;Enter&apos; &amp;&amp; searchBusiness()}
+
+             placeholder=&quot;e.g. Mike&apos;s Pizza Austin TX&quot;
+
+             className=&quot;w-full border border-tan rounded-lg px-4 py-3 mb-4 text-darkBrown&quot;/&gt;
+
+      &lt;button onClick={searchBusiness} disabled={loading}
+
+              className=&quot;w-full bg-gold text-espresso font-bold py-3 rounded-xl&quot;&gt;
+
+        {loading ? &apos;Searching...&apos; : &apos;Search Google Business&apos;}
+
+      &lt;/button&gt;
+
+      &lt;p className=&quot;text-center text-sm text-tan mt-3&quot;&gt;
+
+        &lt;a href=&quot;#&quot; onClick={() =&gt; setStep(&apos;manual&apos;)} className=&quot;underline&quot;&gt;
+
+          I don&apos;t have a Google listing — enter manually
+
+        &lt;/a&gt;
+
+      &lt;/p&gt;
+
+    &lt;/div&gt;
+
+  )
+
+  // ── Step 2: Confirmation Card ────────────────────────────────────
+
+  if (step === 2) return (
+
+    &lt;div className=&quot;max-w-xl mx-auto mt-8 space-y-4&quot;&gt;
+
+      &lt;h2 className=&quot;text-xl font-bold text-espresso&quot;&gt;Is this your business?&lt;/h2&gt;
+
+      &lt;div className=&quot;bg-white rounded-2xl p-6 shadow border border-tan&quot;&gt;
+
+        {business.photos?.[0] &amp;&amp; &lt;img src={business.photos[0]} className=&quot;w-full h-32 object-cover rounded-xl mb-4&quot;/&gt;}
+
+        &lt;p className=&quot;text-lg font-bold text-espresso&quot;&gt;{business.name}&lt;/p&gt;
+
+        &lt;p className=&quot;text-tan text-sm&quot;&gt;{business.address}&lt;/p&gt;
+
+        {/* Editable fields for missing data */
+
+        {[&apos;phone&apos;, &apos;hours&apos;].map(field =&gt; business[field] ? (
+
+          &lt;p key={field} className=&quot;text-sm text-darkBrown mt-1&quot;&gt;
+
+            {field === &apos;phone&apos; ? &apos;📞&apos; : &apos;🕐&apos;} {business[field]}
+
+          &lt;/p&gt;
+
+        ) : (
+
+          &lt;div key={field} className=&quot;mt-2&quot;&gt;
+
+            &lt;span className=&quot;text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full&quot;&gt;Missing&lt;/span&gt;
+
+            &lt;input placeholder={`Enter ${field}`}
+
+                   onChange={e =&gt; setMissing(m =&gt; ({...m, [field]: e.target.value}))}
+
+                   className=&quot;w-full border border-yellow-300 rounded-lg px-3 py-2 mt-1 text-sm&quot;/&gt;
+
+          &lt;/div&gt;
+
+        )))}
+
+      &lt;/div&gt;
+
+      &lt;div className=&quot;flex gap-3&quot;&gt;
+
+        &lt;button onClick={() =&gt; setStep(1)} className=&quot;flex-1 py-3 rounded-xl border border-tan text-tan&quot;&gt;
+
+          Search Again
+
+        &lt;/button&gt;
+
+        &lt;button onClick={() =&gt; setStep(3)} className=&quot;flex-1 py-3 rounded-xl bg-gold text-espresso font-bold&quot;&gt;
+
+          Confirm &amp; Continue
+
+        &lt;/button&gt;
+
+      &lt;/div&gt;
+
+    &lt;/div&gt;
+
+  )
+
+  // ── Step 3: Style Preferences ────────────────────────────────────
+
+  if (step === 3) return (
+
+    &lt;div className=&quot;max-w-xl mx-auto mt-8 space-y-6&quot;&gt;
+
+      &lt;div&gt;
+
+        &lt;h2 className=&quot;text-xl font-bold text-espresso mb-1&quot;&gt;Customize your site&lt;/h2&gt;
+
+        &lt;p className=&quot;text-tan text-sm&quot;&gt;Optional — skip to use smart defaults for your industry.&lt;/p&gt;
+
+      &lt;/div&gt;
+
+      {/* Tone */}
+
+      &lt;div&gt;
+
+        &lt;label className=&quot;text-sm font-semibold text-espresso mb-2 block&quot;&gt;Tone&lt;/label&gt;
+
+        &lt;div className=&quot;flex flex-wrap gap-2&quot;&gt;
+
+          {STYLE_OPTIONS.tone.map(t =&gt; (
+
+            &lt;button key={t} onClick={() =&gt; setStylePrefs(s =&gt; ({...s, tone: t}))}
+
+                    className={`px-4 py-2 rounded-full text-sm border transition
+
+                      ${stylePrefs.tone === t
+
+                        ? &apos;bg-espresso text-gold border-espresso&apos;
+
+                        : &apos;border-tan text-tan hover:border-espresso&apos;}`}&gt;
+
+              {t}
+
+            &lt;/button&gt;
+
+          ))}
+
+        &lt;/div&gt;
+
+      &lt;/div&gt;
+
+      {/* Color Palette */}
+
+      &lt;div&gt;
+
+        &lt;label className=&quot;text-sm font-semibold text-espresso mb-2 block&quot;&gt;Color Style&lt;/label&gt;
+
+        &lt;div className=&quot;flex flex-wrap gap-2&quot;&gt;
+
+          {STYLE_OPTIONS.color.map(c =&gt; (
+
+            &lt;button key={c} onClick={() =&gt; setStylePrefs(s =&gt; ({...s, color: c}))}
+
+                    className={`px-4 py-2 rounded-full text-sm border transition
+
+                      ${stylePrefs.color === c
+
+                        ? &apos;bg-espresso text-gold border-espresso&apos;
+
+                        : &apos;border-tan text-tan hover:border-espresso&apos;}`}&gt;
+
+              {c}
+
+            &lt;/button&gt;
+
+          ))}
+
+        &lt;/div&gt;
+
+      &lt;/div&gt;
+
+      {/* Layout */}
+
+      &lt;div&gt;
+
+        &lt;label className=&quot;text-sm font-semibold text-espresso mb-2 block&quot;&gt;Layout Style&lt;/label&gt;
+
+        &lt;div className=&quot;flex flex-wrap gap-2&quot;&gt;
+
+          {STYLE_OPTIONS.layout.map(l =&gt; (
+
+            &lt;button key={l} onClick={() =&gt; setStylePrefs(s =&gt; ({...s, layout: l}))}
+
+                    className={`px-4 py-2 rounded-full text-sm border transition
+
+                      ${stylePrefs.layout === l
+
+                        ? &apos;bg-espresso text-gold border-espresso&apos;
+
+                        : &apos;border-tan text-tan hover:border-espresso&apos;}`}&gt;
+
+              {l}
+
+            &lt;/button&gt;
+
+          ))}
+
+        &lt;/div&gt;
+
+      &lt;/div&gt;
+
+      {/* Free text extra context */}
+
+      &lt;div&gt;
+
+        &lt;label className=&quot;text-sm font-semibold text-espresso mb-2 block&quot;&gt;
+
+          Anything else? &lt;span className=&quot;font-normal text-tan&quot;&gt;(optional)&lt;/span&gt;
+
+        &lt;/label&gt;
+
+        &lt;textarea
+
+          value={stylePrefs.extra}
+
+          onChange={e =&gt; setStylePrefs(s =&gt; ({...s, extra: e.target.value.slice(0, 500)}))}
+
+          placeholder=&quot;e.g. We do emergency callouts 24/7. Brand colours are navy and white. Show our team photos.&quot;
+
+          rows={3}
+
+          className=&quot;w-full border border-tan rounded-xl px-4 py-3 text-sm text-darkBrown resize-none&quot;/&gt;
+
+        &lt;p className=&quot;text-right text-xs text-tan mt-1&quot;&gt;{stylePrefs.extra.length}/500&lt;/p&gt;
+
+      &lt;/div&gt;
+
+      &lt;button onClick={generate} disabled={loading}
+
+              className=&quot;w-full bg-gold text-espresso font-bold text-lg py-4 rounded-xl shadow&quot;&gt;
+
+        {loading ? &apos;Starting...&apos; : &apos;Generate My Website&apos;}
+
+      &lt;/button&gt;
+
+    &lt;/div&gt;
+
+  )
+
+  return null
+
+}
+
+7.4  Agent Progress Component
+
+The AgentProgress component polls the pipeline status every 3 seconds and renders a row per agent with colour-coded status icons.
+
+// components/AgentProgress.jsx
+
+&apos;use client&apos;
+
+import { useState, useEffect } from &apos;react&apos;
+
+const AGENTS = [
+
+  &apos;Business Analyst&apos;, &apos;Content Writer&apos;, &apos;Style Agent&apos;, &apos;Planner&apos;,
+
+  &apos;Prompt Engineer&apos;, &apos;Code Generator&apos;, &apos;Debugger&apos;, &apos;SEO Agent&apos;, &apos;QA Agent&apos;, &apos;Mobile Optimizer&apos;
+
+]
+
+function statusIcon(agent, activeAgent, completedAgents, errorAgent) {
+
+  if (errorAgent === agent) return { icon: &apos;✗&apos;, color: &apos;text-red-500&apos; }
+
+  if (completedAgents.includes(agent)) return { icon: &apos;✓&apos;, color: &apos;text-green-500&apos; }
+
+  if (activeAgent === agent) return { icon: &apos;⟳&apos;, color: &apos;text-gold animate-spin&apos; }
+
+  return { icon: &apos;○&apos;, color: &apos;text-gray-300&apos; }
+
+}
+
+export default function AgentProgress({ jobId, onComplete }) {
+
+  const [status, setStatus] = useState(null)
+
+  const [completed, setCompleted] = useState([])
+
+  useEffect(() =&gt; {
+
+    const iv = setInterval(async () =&gt; {
+
+      const res = await fetch(`/api/sites/${jobId}/status`)
+
+      const data = await res.json()
+
+      setStatus(data)
+
+      if (data.phase === &apos;done&apos;) { clearInterval(iv); onComplete(data) }
+
+      if (data.phase === &apos;error&apos;) clearInterval(iv)
+
+      // Track completed agents based on ordering
+
+      const idx = AGENTS.findIndex(a =&gt; a === data.activeAgent)
+
+      if (idx &gt; 0) setCompleted(AGENTS.slice(0, idx))
+
+    }, 3000)
+
+    return () =&gt; clearInterval(iv)
+
+  }, [jobId])
+
+  return (
+
+    &lt;div className=&quot;bg-white rounded-2xl p-6 shadow space-y-3 max-w-lg mx-auto mt-8&quot;&gt;
+
+      &lt;h2 className=&quot;font-bold text-espresso mb-4&quot;&gt;Building your website...&lt;/h2&gt;
+
+      {AGENTS.map(agent =&gt; {
+
+        const s = statusIcon(agent, status?.activeAgent, completed, null)
+
+        return (
+
+          &lt;div key={agent} className=&quot;flex items-center gap-3&quot;&gt;
+
+            &lt;span className={`text-lg ${s.color}`}&gt;{s.icon}&lt;/span&gt;
+
+            &lt;span className=&quot;text-sm text-darkBrown&quot;&gt;{agent}&lt;/span&gt;
+
+          &lt;/div&gt;
+
+        )
+
+      })}
+
+    &lt;/div&gt;
+
+  )
+
+}
+
+7.5  My Sites Grid
+
+// app/dashboard/sites/page.jsx
+
+&apos;use client&apos;
+
+import { useEffect, useState } from &apos;react&apos;
+
+import { supabase } from &apos;@/lib/supabase&apos;
+
+import SiteCard from &apos;@/components/SiteCard&apos;
+
+export default function MySitesPage() {
+
+  const [sites, setSites] = useState([])
+
+  useEffect(() =&gt; {
+
+    async function load() {
+
+      const { data: { user } } = await supabase.auth.getUser()
+
+      const { data } = await supabase.from(&apos;projects&apos;)
+
+        .select(&apos;*&apos;).eq(&apos;user_id&apos;, user.id).order(&apos;created_at&apos;, { ascending: false })
+
+      setSites(data || [])
+
+    }
+
+    load()
+
+  }, [])
+
+  if (!sites.length) return (
+
+    &lt;div className=&quot;text-center mt-32&quot;&gt;
+
+      &lt;p className=&quot;text-tan text-lg mb-6&quot;&gt;No sites yet. Build your first one!&lt;/p&gt;
+
+      &lt;a href=&quot;/dashboard/build&quot; className=&quot;bg-gold text-espresso font-bold px-8 py-3 rounded-xl&quot;&gt;
+
+        Build Your First Site
+
+      &lt;/a&gt;
+
+    &lt;/div&gt;
+
+  )
+
+  return (
+
+    &lt;div&gt;
+
+      &lt;h1 className=&quot;text-2xl font-bold text-espresso mb-8&quot;&gt;My Sites&lt;/h1&gt;
+
+      &lt;div className=&quot;grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6&quot;&gt;
+
+        {sites.map(site =&gt; &lt;SiteCard key={site.id} site={site} /&gt;)}
+
+      &lt;/div&gt;
+
+    &lt;/div&gt;
+
+  )
+
+}
+
+Step 7 Verification Checklist
+
+Google Places search returns real business data for a test query
+
+Missing fields are highlighted and editable on the confirmation card
+
+Clicking Generate creates a project in Supabase and returns a jobId
+
+AgentProgress component polls correctly and updates agent rows
+
+Preview page loads with iframe showing the generated site
+
+My Sites grid shows all projects for the logged-in user
+
+Empty state shows correctly for new users
+
+STEP 8
+
+Stripe Billing &amp; Subscription Management
+
+Implementing checkout sessions, webhook processing, the reverse trial flow, plan downgrade logic, and all Supabase edge functions for billing.
+
+Billing Architecture
+
+Onara uses Stripe for all payment processing. The flow is: user clicks Upgrade -&gt; Next.js creates a Stripe Checkout Session -&gt; user pays on Stripe-hosted page -&gt; Stripe fires a webhook to the Supabase edge function -&gt; edge function updates the users table. No card data ever touches the Onara servers.
+
+8.1  Stripe Checkout Route
+
+// app/api/stripe/route.js
+
+import { NextResponse } from &apos;next/server&apos;
+
+import Stripe from &apos;stripe&apos;
+
+import { getServiceClient } from &apos;@/lib/supabase&apos;
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+
+export async function POST(req) {
+
+  const supabase = getServiceClient()
+
+  const { data: { user } } = await supabase.auth.getUser(
+
+    req.headers.get(&apos;Authorization&apos;)?.replace(&apos;Bearer &apos;, &apos;&apos;)
+
+  )
+
+  if (!user) return NextResponse.json({ error: &apos;Unauthorized&apos; }, { status: 401 })
+
+  const { plan } = await req.json()
+
+  const priceId = plan === &apos;pro&apos;
+
+    ? process.env.STRIPE_PRO_PRICE_ID
+
+    : process.env.STRIPE_STARTER_PRICE_ID
+
+  const session = await stripe.checkout.sessions.create({
+
+    mode: &apos;subscription&apos;,
+
+    line_items: [{ price: priceId, quantity: 1 }],
+
+    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?upgraded=true`,
+
+    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
+
+    customer_email: user.email,
+
+    metadata: { userId: user.id, plan },
+
+  })
+
+  return NextResponse.json({ url: session.url })
+
+}
+
+8.2  Stripe Webhook Handler
+
+// app/api/webhooks/stripe/route.js
+
+import { NextResponse } from &apos;next/server&apos;
+
+import Stripe from &apos;stripe&apos;
+
+import { getServiceClient } from &apos;@/lib/supabase&apos;
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+
+export async function POST(req) {
+
+  const body = await req.text()
+
+  const sig = req.headers.get(&apos;stripe-signature&apos;)
+
+  let event
+
+  try {
+
+    event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET)
+
+  } catch {
+
+    return NextResponse.json({ error: &apos;Invalid signature&apos; }, { status: 400 })
+
+  }
+
+  const supabase = getServiceClient()
+
+  if (event.type === &apos;checkout.session.completed&apos;) {
+
+    const { userId, plan } = event.data.object.metadata
+
+    const revisions = plan === &apos;pro&apos; ? 9999 : 10
+
+    await supabase.from(&apos;users&apos;).update({
+
+      plan, sub_status: &apos;active&apos;,
+
+      stripe_customer_id: event.data.object.customer,
+
+      stripe_subscription_id: event.data.object.subscription,
+
+      is_trial: false,
+
+    }).eq(&apos;id&apos;, userId)
+
+    // Set show_url true for all user projects
+
+    await supabase.from(&apos;projects&apos;).update({ show_url: true, revisions_allowed: revisions }).eq(&apos;user_id&apos;, userId)
+
+  }
+
+  if (event.type === &apos;customer.subscription.deleted&apos; || event.type === &apos;invoice.payment_failed&apos;) {
+
+    const customerId = event.data.object.customer
+
+    const { data: user } = await supabase.from(&apos;users&apos;).select(&apos;id&apos;).eq(&apos;stripe_customer_id&apos;, customerId).single()
+
+    if (user) {
+
+      await supabase.from(&apos;users&apos;).update({ plan: &apos;free&apos;, sub_status: &apos;inactive&apos; }).eq(&apos;id&apos;, user.id)
+
+      await supabase.from(&apos;projects&apos;).update({ show_url: false }).eq(&apos;user_id&apos;, user.id)
+
+    }
+
+  }
+
+  return NextResponse.json({ received: true })
+
+}
+
+8.3  Supabase Edge Function — downgrade-trials
+
+// supabase/functions/downgrade-trials/index.ts
+
+import { createClient } from &quot;https://esm.sh/@supabase/supabase-js@2&quot;
+
+Deno.serve(async () =&gt; {
+
+  const supabase = createClient(
+
+    Deno.env.get(&quot;SUPABASE_URL&quot;)!,
+
+    Deno.env.get(&quot;SUPABASE_SERVICE_ROLE_KEY&quot;)!
+
+  )
+
+  // Find all expired trials
+
+  const { data: expired } = await supabase
+
+    .from(&quot;users&quot;)
+
+    .select(&quot;id&quot;)
+
+    .eq(&quot;is_trial&quot;, true)
+
+    .lt(&quot;trial_ends_at&quot;, new Date().toISOString())
+
+  for (const user of expired || []) {
+
+    // Downgrade user
+
+    await supabase.from(&quot;users&quot;).update({
+
+      plan: &quot;free&quot;, is_trial: false,
+
+    }).eq(&quot;id&quot;, user.id)
+
+    // Hide all public URLs
+
+    await supabase.from(&quot;projects&quot;).update({ show_url: false }).eq(&quot;user_id&quot;, user.id)
+
+  }
+
+  return new Response(JSON.stringify({ downgraded: expired?.length || 0 }))
+
+})
+
+8.4  Supabase Edge Function — reset-revisions
+
+// supabase/functions/reset-revisions/index.ts
+
+import { createClient } from &quot;https://esm.sh/@supabase/supabase-js@2&quot;
+
+Deno.serve(async () =&gt; {
+
+  const supabase = createClient(
+
+    Deno.env.get(&quot;SUPABASE_URL&quot;)!,
+
+    Deno.env.get(&quot;SUPABASE_SERVICE_ROLE_KEY&quot;)!
+
+  )
+
+  const now = new Date().toISOString()
+
+  // Reset revisions for all projects past their reset date
+
+  const { data: projects } = await supabase
+
+    .from(&quot;projects&quot;)
+
+    .select(&quot;id, user_id, revisions_allowed&quot;)
+
+    .lt(&quot;revisions_reset&quot;, now)
+
+  for (const project of projects || []) {
+
+    const nextReset = new Date()
+
+    nextReset.setMonth(nextReset.getMonth() + 1)
+
+    await supabase.from(&quot;projects&quot;).update({
+
+      revisions_used: 0,
+
+      revisions_reset: nextReset.toISOString(),
+
+    }).eq(&quot;id&quot;, project.id)
+
+  }
+
+  return new Response(JSON.stringify({ reset: projects?.length || 0 }))
+
+})
+
+8.5  Deploying Edge Functions
+
+# Deploy all three edge functions
+
+supabase functions deploy stripe-webhook
+
+supabase functions deploy downgrade-trials
+
+supabase functions deploy reset-revisions
+
+# Add the stripe-webhook URL to Stripe Dashboard
+
+# Developers &gt; Webhooks &gt; Add Endpoint
+
+# URL: https://your-project.supabase.co/functions/v1/stripe-webhook
+
+# Events: checkout.session.completed, customer.subscription.deleted, invoice.payment_failed
+
+# Test the webhook locally
+
+stripe listen --forward-to localhost:3000/api/webhooks/stripe
+
+Step 8 Verification Checklist
+
+Stripe Checkout redirects to Stripe-hosted payment page for both Starter and Pro
+
+After test payment, user plan updates to correct value in Supabase users table
+
+show_url updates to true for all user projects after payment
+
+Webhook signature validation rejects requests without correct signature
+
+downgrade-trials edge function deployed and tested: creates expired trial user, runs function, confirms plan = free
+
+reset-revisions edge function deployed and tested: revisions_used resets to 0
+
+Stripe billing portal accessible from Account page
+
+Cancellation sets plan to free and show_url to false
+
+STEP 9
+
+Deployment Pipeline: GitHub + Cloudflare Pages
+
+Implementing the complete post-pipeline deployment: parsing generated code, backing up to GitHub, deploying to Cloudflare Pages, and sending confirmation emails.
+
+The Deployment Chain
+
+After Agent 9 approves the generated code, the Next.js backend takes over. The pipeline is purely deterministic at this stage — no AI involved. The steps are: parse the code into three files, save a backup zip to Supabase storage, commit to the GitHub monorepo for version history, deploy to Cloudflare Pages via Direct Upload API, save the project record, and send a confirmation email.
+
+9.1  Code Parser
+
+// lib/codeParser.js
+
+export function parseGeneratedCode(codeString) {
+
+  const htmlMatch = codeString.match(/&lt;!--\s*index\.html\s*--&gt;[\s\S]*?(?=\/\*\s*style\.css|$)/)
+
+  const cssMatch  = codeString.match(/\/\*\s*style\.css\s*\*\/[\s\S]*?(?=\/\/\s*script\.js|$)/)
+
+  const jsMatch   = codeString.match(/\/\/\s*script\.js[\s\S]*/)
+
+  if (!htmlMatch || !cssMatch || !jsMatch) {
+
+    throw new Error(&quot;Generated code missing required file markers&quot;)
+
+  }
+
+  return {
+
+    html: htmlMatch[0].replace(/&lt;!--\s*index\.html\s*--&gt;/, &apos;&apos;).trim(),
+
+    css:  cssMatch[0].replace(/\/\*\s*style\.css\s*\*\//, &apos;&apos;).trim(),
+
+    js:   jsMatch[0].replace(/\/\/\s*script\.js/, &apos;&apos;).trim(),
+
+  }
+
+}
+
+9.2  GitHub Monorepo Backup
+
+// lib/githubBackup.js
+
+const GITHUB_USER = process.env.GITHUB_USERNAME  // set this in .env to your GitHub username
+
+const REPO        = &apos;onara-sites&apos;
+
+// Fetch a fresh installation token from the FastAPI server
+
+// (GitHub App tokens expire after 1 hour — always get a fresh one)
+
+async function getGitHubToken() {
+
+  const res = await fetch(`${process.env.PIPELINE_SERVER_URL}/github/token`, {
+
+    headers: { &apos;x-pipeline-secret&apos;: process.env.PIPELINE_SECRET }
+
+  })
+
+  return (await res.json()).token
+
+}
+
+async function upsertFile(token, path, content, message) {
+
+  const url = `https://api.github.com/repos/${GITHUB_USER}/${REPO}/contents/${path}`
+
+  let sha = null
+
+  const existing = await fetch(url, {
+
+    headers: { Authorization: `token ${token}` }
+
+  })
+
+  if (existing.ok) sha = (await existing.json()).sha
+
+  await fetch(url, {
+
+    method: &apos;PUT&apos;,
+
+    headers: { Authorization: `token ${token}`, &apos;Content-Type&apos;: &apos;application/json&apos; },
+
+    body: JSON.stringify({
+
+      message,
+
+      content: Buffer.from(content).toString(&apos;base64&apos;),
+
+      ...(sha ? { sha } : {}),
+
+    }),
+
+  })
+
+}
+
+export async function backupSiteToGitHub(projectId, { html, css, js }) {
+
+  const token = await getGitHubToken()  // fresh GitHub App token
+
+  const base = `sites/${projectId}`
+
+  await Promise.all([
+
+    upsertFile(token, `${base}/index.html`, html, `Add site ${projectId}`),
+
+    upsertFile(token, `${base}/style.css`,  css,  `Add site ${projectId}`),
+
+    upsertFile(token, `${base}/script.js`,  js,   `Add site ${projectId}`),
+
+  ])
+
+}
+
+9.3  Cloudflare Pages Deployment
+
+// lib/cloudflarePages.js
+
+const CF_ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID
+
+const CF_TOKEN   = process.env.CLOUDFLARE_API_TOKEN
+
+export async function deploySiteToCloudflare(projectId, { html, css, js }) {
+
+  const base = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/pages`
+
+  const headers = { Authorization: `Bearer ${CF_TOKEN}` }
+
+  // Create project (or reuse if exists)
+
+  const projectName = `onara-site-${projectId}`
+
+  await fetch(`${base}/projects`, {
+
+    method: &apos;POST&apos;, headers: { ...headers, &apos;Content-Type&apos;: &apos;application/json&apos; },
+
+    body: JSON.stringify({ name: projectName, production_branch: &apos;main&apos; }),
+
+  })
+
+  // Deploy via Direct Upload
+
+  const form = new FormData()
+
+  form.append(&apos;manifest&apos;, JSON.stringify({
+
+    &apos;/index.html&apos;: { hash: projectId.slice(0, 8) + &apos;0&apos;, size: html.length },
+
+    &apos;/style.css&apos;:  { hash: projectId.slice(0, 8) + &apos;1&apos;, size: css.length },
+
+    &apos;/script.js&apos;:  { hash: projectId.slice(0, 8) + &apos;2&apos;, size: js.length },
+
+  }))
+
+  form.append(&apos;/index.html&apos;, new Blob([html], { type: &apos;text/html&apos; }), &apos;index.html&apos;)
+
+  form.append(&apos;/style.css&apos;,  new Blob([css],  { type: &apos;text/css&apos; }),  &apos;style.css&apos;)
+
+  form.append(&apos;/script.js&apos;,  new Blob([js],   { type: &apos;text/javascript&apos; }), &apos;script.js&apos;)
+
+  const deployRes = await fetch(`${base}/projects/${projectName}/deployments`, {
+
+    method: &apos;POST&apos;, headers, body: form,
+
+  })
+
+  const deploy = await deployRes.json()
+
+  return `https://${projectName}.pages.dev`
+
+}
+
+9.4  Complete Deployment Orchestrator
+
+// lib/deploymentOrchestrator.js
+
+import { parseGeneratedCode } from &apos;./codeParser&apos;
+
+import { backupSiteToGitHub } from &apos;./githubBackup&apos;
+
+import { deploySiteToCloudflare } from &apos;./cloudflarePages&apos;
+
+import { getServiceClient } from &apos;./supabase&apos;
+
+import { Resend } from &apos;resend&apos;
+
+const resend = new Resend(process.env.RESEND_API_KEY)
+
+export async function deployGeneratedSite({ jobId, userId, userEmail, rawCode, plan }) {
+
+  const supabase = getServiceClient()
+
+  // 1. Parse the code
+
+  const { html, css, js } = parseGeneratedCode(rawCode)  // rawCode is the mobile-optimized final output
+
+  // 2. Backup to GitHub
+
+  await backupSiteToGitHub(jobId, { html, css, js })
+
+  // 3. Deploy to Cloudflare Pages
+
+  const cloudflareUrl = await deploySiteToCloudflare(jobId, { html, css, js })
+
+  // 4. Update project record in Supabase
+
+  const showUrl = plan !== &apos;free&apos;
+
+  const revisionsAllowed = plan === &apos;pro&apos; ? 9999 : plan === &apos;starter&apos; ? 10 : 3
+
+  const nextReset = new Date(); nextReset.setMonth(nextReset.getMonth() + 1)
+
+  await supabase.from(&apos;projects&apos;).update({
+
+    cloudflare_url: cloudflareUrl,
+
+    status: &apos;live&apos;,
+
+    show_url: showUrl,
+
+    revisions_allowed: revisionsAllowed,
+
+    revisions_reset: nextReset.toISOString(),
+
+  }).eq(&apos;project_id&apos;, jobId)
+
+  // 5. Send confirmation email
+
+  await resend.emails.send({
+
+    from: &apos;Onara &lt;noreply@mail.onara.com&gt;&apos;,
+
+    to: userEmail,
+
+    subject: &apos;Your website is ready!&apos;,
+
+    html: showUrl
+
+      ? `&lt;p&gt;Your site is live at &lt;a href=&quot;${cloudflareUrl}&quot;&gt;${cloudflareUrl}&lt;/a&gt;&lt;/p&gt;`
+
+      : `&lt;p&gt;Your site preview is ready in your Onara dashboard. Upgrade to go live.&lt;/p&gt;`,
+
+  })
+
+  return { cloudflareUrl, showUrl }
+
+}
+
+Step 9 Verification Checklist
+
+parseGeneratedCode correctly extracts HTML, CSS, and JS from a sample code string
+
+GitHub backup successfully commits all three files to the onara-sites monorepo
+
+Cloudflare Pages deployment creates a new project and returns a .pages.dev URL
+
+Full end-to-end: generate site, see it live at the Cloudflare URL
+
+show_url correctly controls whether the URL is visible in the dashboard
+
+Confirmation email sent via Resend with the correct URL
+
+Project record in Supabase updated with cloudflare_url and status: live
+
+STEP 10
+
+Launch Preparation: SEO, Legal &amp; Monitoring
+
+Setting up uptime monitoring, creating legal pages, writing the launch-day SEO foundation, configuring analytics, and executing the launch sequence.
+
+Pre-Launch Checklist
+
+Most early-stage products fail not because of bad code, but because they launch without basic infrastructure in place: no monitoring (so they do not know when the server is down), no legal pages (which creates liability), and no analytics (so they cannot improve conversion). This step ensures all three are covered before any real users arrive.
+
+10.1  Uptime Monitoring
+
+Go to uptimerobot.com and create a free account.
+
+Add a new monitor: HTTP(S) type, URL: https://your-cloudflare-tunnel-url.trycloudflare.com/health (your pipeline server). Set monitoring interval to 5 minutes.
+
+Add alert contacts: your email and mobile number for SMS.
+
+Add a second monitor for the Next.js app: your Vercel deployment URL.
+
+Verify the health endpoint returns {&quot;status&quot;:&quot;ok&quot;} on your pipeline server.
+
+Configure PM2 to auto-restart the FastAPI server if it crashes:
+
+# From inside onara-pipeline/ with venv activated:
+
+pm2 start &quot;uvicorn main:app --port 8000&quot; --name onara-pipeline
+
+pm2 startup  # generates system startup command — run the output
+
+pm2 save     # saves the current process list
+
+# Check status
+
+pm2 status
+
+# View logs
+
+pm2 logs onara-pipeline
+
+10.2  Legal Pages
+
+Two legal pages are required before any paying users: Terms of Service and Privacy Policy. These can be generated using a legal document generator (Termly, PrivacyPolicies.com) but must be customized for Onara&apos;s specific data practices.
+
+Key Points for Terms of Service
+
+Service description: AI-generated website builder, no guarantee of accuracy in generated content
+
+Permitted use: only for legal business websites, no spam or deceptive sites
+
+Subscription and cancellation: terms described exactly as implemented in billing logic
+
+Data handling: business data is processed to generate websites, backups retained for redeployment
+
+Limitation of liability: Onara not responsible for downtime of user sites on Cloudflare
+
+Key Points for Privacy Policy
+
+Data collected: email address, Google Business profile data, payment method (handled by Stripe, not stored by Onara)
+
+Third-party services: Supabase (database), Stripe (payments), Cloudflare (hosting), GitHub (code backup), Resend (email), Google (OAuth and Places API)
+
+Data retention: account and project data retained until account deletion. Deletion removes all user data.
+
+GDPR: EU users have the right to access, correct, and delete their data via the Account page
+
+Cookies: Supabase session token stored in browser localStorage. Used for authentication only.
+
+10.3  On-Page SEO for the Landing Page
+
+Before launch, the landing page needs correct meta tags, structured data, and a sitemap to be discoverable by Google.
+
+// app/layout.jsx — root layout with meta tags
+
+export const metadata = {
+
+  title: &apos;Onara — AI Website Builder for Small Businesses | Free to Start&apos;,
+
+  description: &apos;Import your Google Business Profile and get a complete website in 60 seconds. No coding. No design skills. Free to try.&apos;,
+
+  openGraph: {
+
+    title: &apos;Onara — AI Website Builder&apos;,
+
+    description: &apos;Your business website, live in minutes.&apos;,
+
+    type: &apos;website&apos;,
+
+    url: &apos;https://onara.tech&apos;,
+
+  },
+
+  other: {
+
+    &apos;application/ld+json&apos;: JSON.stringify({
+
+      &apos;@context&apos;: &apos;https://schema.org&apos;,
+
+      &apos;@type&apos;: &apos;SoftwareApplication&apos;,
+
+      name: &apos;Onara&apos;,
+
+      applicationCategory: &apos;BusinessApplication&apos;,
+
+      offers: { &apos;@type&apos;: &apos;Offer&apos;, price: &apos;0&apos;, priceCurrency: &apos;USD&apos; },
+
+    })
+
+  }
+
+}
+
+Create a sitemap at app/sitemap.js:
+
+// app/sitemap.js
+
+export default function sitemap() {
+
+  return [
+
+    { url: &apos;https://onara.tech&apos;, lastModified: new Date(), changeFrequency: &apos;weekly&apos;, priority: 1 },
+
+    { url: &apos;https://onara.tech/login&apos;, lastModified: new Date(), priority: 0.5 },
+
+    { url: &apos;https://onara.tech/signup&apos;, lastModified: new Date(), priority: 0.8 },
+
+    { url: &apos;https://onara.tech/for/plumbers&apos;, lastModified: new Date(), priority: 0.7 },
+
+    { url: &apos;https://onara.tech/for/photographers&apos;, lastModified: new Date(), priority: 0.7 },
+
+    { url: &apos;https://onara.tech/for/food-trucks&apos;, lastModified: new Date(), priority: 0.7 },
+
+  ]
+
+}
+
+10.4  Analytics Setup
+
+Install Vercel Analytics: in the Vercel dashboard, go to your project &gt; Analytics &gt; Enable. This is free and gives you page views and Core Web Vitals.
+
+Add the analytics component to app/layout.jsx:
+
+import { Analytics } from &apos;@vercel/analytics/react&apos;
+
+export default function RootLayout({ children }) {
+
+  return (
+
+    &lt;html&gt;
+
+      &lt;body&gt;
+
+        {children}
+
+        &lt;Analytics /&gt;
+
+      &lt;/body&gt;
+
+    &lt;/html&gt;
+
+  )
+
+}
+
+Install PostHog for event tracking: npm install posthog-js
+
+Track key events: user_signed_up, site_generated, plan_upgraded, revision_requested.
+
+Add Stripe Revenue Dashboard to weekly review: check MRR, churn rate, and new subscribers.
+
+10.5  Security Final Checklist
+
+WARNING
+
+Run through every item on this checklist before exposing Onara to real users. Each item represents a real vulnerability category that has caused production data breaches.
+
+RLS enabled on ALL Supabase tables — verify each table individually
+
+SUPABASE_SECRET_KEY never appears in any NEXT_PUBLIC_ variable or client-side code
+
+Stripe webhook signature verified with constructEvent before processing
+
+All user inputs (especially extraContext) sanitized before passing to AI agents
+
+Project ownership verified on every API route that touches a project
+
+PIPELINE_SECRET rotated from any value used during development
+
+All .env and .env.local files in .gitignore and NOT tracked by git
+
+Spending limits configured in Vercel dashboard
+
+Cloudflare rate limiting enabled on the Pages domain
+
+DigitalOcean firewall configured when you migrate to DO (port 8000 from Vercel IPs only)
+
+10.6  Launch Day Sequence
+
+Execute these steps in order on launch day. Do not skip the early access phase — it gives you real user feedback before committing to a public launch.
+
+Phase 1: Soft Launch (Week Before)
+
+Reach out personally to 20-30 small business owners. Offer the first month free in exchange for honest feedback and a testimonial.
+
+Walk each person through the product on a video call. Watch where they get confused — those are your highest-priority UX fixes.
+
+Collect at least 3 video testimonials of real businesses showing their generated site.
+
+Generate 10+ example sites for different business types. These become the Examples section on the landing page.
+
+Phase 2: Product Hunt Launch
+
+Schedule the Product Hunt submission for a Tuesday or Wednesday at 12:01 AM Pacific — highest traffic days.
+
+Prepare the tagline: &quot;Your business website, live in 60 seconds — powered by AI, no coding required.&quot;
+
+Prepare 4-5 screenshots showing: the Google import, the 10-agent progress, the live site preview, and the pricing page.
+
+Create a 60-second demo video showing a real generation from start to finish.
+
+Line up 20+ people to upvote on launch day. Direct them to the PH page at the same time for velocity.
+
+Phase 3: Community Launch
+
+Post in r/smallbusiness with a genuine story: &quot;I built a website generator for small businesses — here&apos;s how it works.&quot;
+
+Post in r/entrepreneur and r/sidehustle.
+
+Submit to AI tool directories: There&apos;s An AI For That, Futurepedia, AI Tools Directory.
+
+Post the generation demo on TikTok and Instagram Reels. Target the small business owner audience.
+
+Write a &quot;how I built this&quot; post on dev.to or Hacker News. Technical founders share these.
+
+10.7  First-Week Metrics to Monitor
+
+Metric
+
+Definition
+
+Target (Week 1)
+
+Signup rate
+
+% of landing page visitors who sign up
+
+&gt; 5%
+
+Generation rate
+
+% of signups who generate a site
+
+&gt; 60%
+
+Trial-to-paid
+
+% of trials that convert to paid
+
+&gt; 4%
+
+Pipeline success rate
+
+% of generations that complete without error
+
+&gt; 90%
+
+Avg generation time
+
+Seconds from click to site preview
+
+&lt; 120s
+
+Churn rate
+
+% of paid users who cancel in week 1
+
+&lt; 10%
+
+Step 10 Verification Checklist
+
+UptimeRobot monitors both the pipeline server and the Next.js app
+
+PM2 is running and configured to auto-restart on the pipeline server
+
+Terms of Service and Privacy Policy pages are live
+
+Landing page has correct meta title, description, and JSON-LD structured data
+
+Sitemap generated and visible at /sitemap.xml
+
+Vercel Analytics enabled
+
+All items on security checklist verified
+
+10+ example sites generated and displayed on the landing page
+
+Product Hunt listing prepared and scheduled
+
+Soft launch completed with at least 5 real users generating sites
+
+STEP 11
+
+Architecture Hardening
+
+Production-grade fixes: crash recovery, timeouts, memory management, deduplication, token caching, structured logging, and rate limiting.
+
+Why This Step Exists
+
+The first 10 steps get Onara to a working product. This step makes it a reliable one. Each fix below addresses a specific failure mode that will cause real problems once you have paying users. Implement these roughly in priority order — the top four are critical before charging anyone.
+
+11.1  Redis Job Queue — Crash Recovery (HIGH PRIORITY)
+
+The current in-memory asyncio queue loses all pending jobs if FastAPI crashes or restarts. A Redis queue persists jobs across restarts so no user loses a generation. This is a 30-minute swap — the pipeline logic does not change at all.
+
+# Install Redis and the Python client
+
+pip install redis rq
+
+# Start Redis on your mini PC
+
+sudo apt install redis-server &amp;&amp; sudo systemctl start redis
+
+# Or via Docker:
+
+docker run -d -p 6379:6379 redis:alpine
+
+# main.py — replace the asyncio.Queue with Redis/RQ
+
+from redis import Redis
+
+from rq import Queue
+
+import os
+
+redis_conn = Redis(host=&quot;localhost&quot;, port=6379)
+
+pipeline_queue = Queue(&quot;onara-pipeline&quot;, connection=redis_conn)
+
+@app.post(&quot;/pipeline/start&quot;)
+
+async def start_pipeline(body: dict, _=Depends(verify_secret)):
+
+    job_id = body[&quot;jobId&quot;]
+
+    # Enqueue — survives crash/restart automatically
+
+    job = pipeline_queue.enqueue(
+
+        &quot;agents.pipeline.run_pipeline_job&quot;,
+
+        body,
+
+        job_id=job_id,
+
+        job_timeout=300,  # 5 minute hard timeout
+
+        result_ttl=3600,
+
+    )
+
+    queue_pos = len(pipeline_queue)
+
+    return {&quot;jobId&quot;: job_id, &quot;queuePosition&quot;: queue_pos}
+
+# Run a separate RQ worker on the mini PC:
+
+# rq worker onara-pipeline --with-scheduler
+
+11.2  Copilot SDK Timeout (HIGH PRIORITY)
+
+The Copilot SDK has no default timeout. If GitHub is slow or unresponsive, the pipeline hangs indefinitely — the user sees a spinner forever and the queue backs up. Wrap every Copilot call in a 30-second asyncio timeout.
+
+# lib/copilot_client.py
+
+import asyncio
+
+async def copilot_sdk_generate(prompt: str) -&gt; str:
+
+    try:
+
+        # Hard 30-second timeout — if Copilot is slow, fail fast
+
+        return await asyncio.wait_for(
+
+            _copilot_call(prompt),
+
+            timeout=30.0
+
+        )
+
+    except asyncio.TimeoutError:
+
+        raise RuntimeError(&quot;Copilot SDK timed out after 30s&quot;)
+
+async def _copilot_call(prompt: str) -&gt; str:
+
+    # Your existing Copilot SDK call here
+
+    ...
+
+11.3  Blackboard Memory Pruning (HIGH PRIORITY)
+
+The blackboard holds all agent outputs in FastAPI memory for the entire duration of a job. With 50 concurrent users generating sites, raw_code alone is 50+ KB per job. Prune each field once it has been consumed downstream.
+
+# agents/pipeline.py — add pruning after each agent
+
+async def run_pipeline(blackboard: dict):
+
+    # ... agents 1-3 run ...
+
+    # Agent 4: Planner — after it reads analyst/content/style, prune them
+
+    await run_with_supervision(planner.run, &quot;Planner&quot;, key=&quot;blueprint&quot;)
+
+    blackboard[&quot;analyst_output&quot;] = None   # consumed, free memory
+
+    blackboard[&quot;content_output&quot;] = None
+
+    blackboard[&quot;style_output&quot;] = None
+
+    # Agent 6: Code Generator — prune the prompt after use
+
+    await run_with_supervision(code_generator.run, &quot;Code Generator&quot;, key=&quot;raw_code&quot;)
+
+    blackboard[&quot;prompt&quot;] = None
+
+    # Agent 7: Debugger — prune raw_code after debugging
+
+    await run_with_supervision(debugger.run, &quot;Debugger&quot;, key=&quot;debugged_code&quot;)
+
+    blackboard[&quot;raw_code&quot;] = None
+
+    # Agent 8: SEO — prune debugged_code after SEO pass
+
+    await run_with_supervision(seo_agent.run, &quot;SEO Agent&quot;, key=&quot;seo_code&quot;)
+
+    blackboard[&quot;debugged_code&quot;] = None
+
+    # Agent 9: QA — prune seo_code after approval
+
+    result = await qa_agent.run(blackboard)
+
+    blackboard[&quot;qa_result&quot;] = result
+
+    blackboard[&quot;qa_approved_code&quot;] = blackboard[&quot;seo_code&quot;]
+
+    blackboard[&quot;seo_code&quot;] = None
+
+    # Agent 10: Mobile Optimizer
+
+    await mobile_optimizer.run(blackboard)
+
+    blackboard[&quot;qa_approved_code&quot;] = None
+
+11.4  Global Job Timeout (HIGH PRIORITY)
+
+Without a hard timeout, a single stuck job can block the queue for hours. 5 minutes is enough for any legitimate generation — if it takes longer something is wrong. Add this to the RQ enqueue call in 11.1 (job_timeout=300) and also add a FastAPI-level guard:
+
+# agents/pipeline.py — wrap entire pipeline in a timeout
+
+import asyncio
+
+async def run_pipeline(blackboard: dict):
+
+    try:
+
+        await asyncio.wait_for(
+
+            _run_all_agents(blackboard),
+
+            timeout=300.0  # 5 minute hard limit
+
+        )
+
+    except asyncio.TimeoutError:
+
+        blackboard[&quot;phase&quot;] = &quot;error&quot;
+
+        blackboard[&quot;errors&quot;].append(&quot;Pipeline exceeded 5 minute timeout&quot;)
+
+        raise
+
+11.5  Smarter ollama_cloud Exception Handling (MEDIUM PRIORITY)
+
+Currently ollama_cloud catches all exceptions identically. A 429 rate limit (temporary) and a 500 server error (persistent) should be handled differently. Waiting 15 seconds on a 500 just wastes time.
+
+# lib/ollama_client.py — differentiate exception types
+
+import httpx
+
+def ollama_cloud(model: str, prompt: str,
+
+                 fallback: str = &quot;llama3.3:8b&quot;) -&gt; str:
+
+    try:
+
+        r = cloud_client.chat(
+
+            model=model,
+
+            messages=[{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: prompt}]
+
+        )
+
+        return r.message.content
+
+    except httpx.HTTPStatusError as e:
+
+        if e.response.status_code == 429:
+
+            # Rate limited — wait then retry once before falling back
+
+            import time; time.sleep(15)
+
+            try:
+
+                r = cloud_client.chat(model=model,
+
+                    messages=[{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: prompt}])
+
+                return r.message.content
+
+            except Exception:
+
+                pass  # fall through to local
+
+        # 5xx or other — fall back immediately, no wait
+
+        print(f&quot;Cloud error {e.response.status_code}, falling back to {fallback}&quot;)
+
+        return ollama_local(fallback, prompt)
+
+    except Exception as e:
+
+        # Timeout, connection error — fall back immediately
+
+        print(f&quot;Cloud connection error, falling back to {fallback}: {e}&quot;)
+
+        return ollama_local(fallback, prompt)
+
+11.6  ChromaDB File Path (MEDIUM PRIORITY)
+
+ChromaDB currently runs in-process with an in-memory store. When you add a second pipeline worker, each worker has its own separate vector store — they cannot share embeddings. Point ChromaDB at a file path on disk now so it persists and can be shared.
+
+# rag/vector_store.py — use persistent file path
+
+import chromadb
+
+import os
+
+CHROMA_PATH = os.getenv(&quot;CHROMA_PATH&quot;, &quot;./chroma_db&quot;)
+
+# Change from:
+
+# client = chromadb.Client()
+
+# To:
+
+client = chromadb.PersistentClient(path=CHROMA_PATH)
+
+# Add to .env:
+
+# CHROMA_PATH=./chroma_db
+
+# Add chroma_db/ to .gitignore — it regenerates on startup
+
+# The embedder.py initialize_rag() call at startup will re-embed
+
+# documents if the store is empty (first run or after deletion)
+
+11.7  Request Deduplication (MEDIUM PRIORITY)
+
+If a user double-clicks Generate, or their browser retries the request, they end up with two jobs in the queue. This wastes tokens and confuses the user. Check for an existing active job before enqueuing.
+
+# main.py — add deduplication check
+
+@app.post(&quot;/pipeline/start&quot;)
+
+async def start_pipeline(body: dict, _=Depends(verify_secret)):
+
+    job_id  = body[&quot;jobId&quot;]
+
+    user_id = body.get(&quot;userId&quot;)
+
+    # Check if this user already has an active job
+
+    if user_id:
+
+        active = [
+
+            bb for bb in job_store.values()
+
+            if bb.get(&quot;user_id&quot;) == user_id
+
+            and bb.get(&quot;phase&quot;) in (&quot;queued&quot;, &quot;running&quot;)
+
+        ]
+
+        if active:
+
+            return {
+
+                &quot;jobId&quot;: active[0][&quot;job_id&quot;],
+
+                &quot;queuePosition&quot;: 0,
+
+                &quot;deduplicated&quot;: True,
+
+                &quot;message&quot;: &quot;You already have an active job&quot;
+
+            }
+
+    bb = create_blackboard(job_id, body[&quot;businessData&quot;],
+
+                           body.get(&quot;stylePrefs&quot;, {}),
+
+                           user_id=user_id)
+
+    job_store[job_id] = bb
+
+    ...
+
+11.8  GitHub App Token Caching (MEDIUM PRIORITY)
+
+The GitHub App installation token is currently generated on every deployment request. Each generation costs an httpx round trip to GitHub. Cache it in FastAPI memory with a 50-minute TTL — GitHub tokens last 60 minutes, so 50 minutes gives a safe buffer.
+
+# lib/github_auth.py — add token cache
+
+import jwt, time, httpx, os
+
+from typing import Optional
+
+_token_cache: Optional[str] = None
+
+_token_expires: float = 0
+
+def generate_installation_token() -&gt; str:
+
+    global _token_cache, _token_expires
+
+    # Return cached token if still valid (50-min TTL)
+
+    if _token_cache and time.time() &lt; _token_expires:
+
+        return _token_cache
+
+    payload = {
+
+        &quot;iat&quot;: int(time.time()) - 60,
+
+        &quot;exp&quot;: int(time.time()) + 540,
+
+        &quot;iss&quot;: os.getenv(&quot;GITHUB_APP_ID&quot;),
+
+    }
+
+    jwt_token = jwt.encode(payload, os.getenv(&quot;GITHUB_APP_PRIVATE_KEY&quot;),
+
+                           algorithm=&quot;RS256&quot;)
+
+    r = httpx.post(
+
+        f&quot;https://api.github.com/app/installations/{os.getenv(&quot;GITHUB_APP_INSTALLATION_ID&quot;)}/access_tokens&quot;,
+
+        headers={&quot;Authorization&quot;: f&quot;Bearer {jwt_token}&quot;,
+
+                 &quot;Accept&quot;: &quot;application/vnd.github+json&quot;}
+
+    )
+
+    r.raise_for_status()
+
+    _token_cache = r.json()[&quot;token&quot;]
+
+    _token_expires = time.time() + 3000  # 50 minutes
+
+    return _token_cache
+
+11.9  Move Prompts to Files (LOWER PRIORITY)
+
+Agent prompts are currently hardcoded strings inside each Python file. Every time you want to improve a prompt you touch Python code, which means restarting the server. Move prompts to a prompts/ directory as .txt files so you can edit them without any code changes.
+
+# Folder structure
+
+onara-pipeline/
+
+  prompts/
+
+    analyst.txt
+
+    content_writer.txt
+
+    style_agent.txt
+
+    planner.txt
+
+    prompt_engineer.txt
+
+    code_generator.txt
+
+    debugger.txt
+
+    seo_agent.txt
+
+    qa_agent.txt
+
+    mobile_optimizer.txt
+
+    supervisor.txt
+
+# lib/prompt_loader.py
+
+import os
+
+_cache = {}
+
+def load_prompt(name: str) -&gt; str:
+
+    if name not in _cache:
+
+        path = os.path.join(os.path.dirname(__file__), &quot;../prompts&quot;, f&quot;{name}.txt&quot;)
+
+        with open(path) as f:
+
+            _cache[name] = f.read()
+
+    return _cache[name]
+
+# Usage in any agent:
+
+# from lib.prompt_loader import load_prompt
+
+# SYSTEM_PROMPT = load_prompt(&quot;analyst&quot;)
+
+11.10  Structured Error Logging to Supabase (LOWER PRIORITY)
+
+When an agent fails in production you currently have no way to debug it without being on the mini PC. Log the full job state to Supabase on any error — this lets you see exactly which agent failed, what the blackboard contained, and what the error was.
+
+# In agents/pipeline.py — add error logging
+
+import httpx, os, json
+
+async def log_error_to_supabase(blackboard: dict, error: str):
+
+    &quot;&quot;&quot;Log failed job state to Supabase for debugging.&quot;&quot;&quot;
+
+    try:
+
+        # Strip large code blobs to keep log small
+
+        log_bb = {k: v for k, v in blackboard.items()
+
+                  if k not in (&quot;raw_code&quot;, &quot;debugged_code&quot;, &quot;seo_code&quot;, &quot;mobile_code&quot;)}
+
+        async with httpx.AsyncClient() as client:
+
+            await client.post(
+
+                f&quot;{os.getenv(&apos;SUPABASE_URL&apos;)}/rest/v1/pipeline_errors&quot;,
+
+                headers={
+
+                    &quot;apikey&quot;: os.getenv(&quot;SUPABASE_SECRET_KEY&quot;),
+
+                    &quot;Authorization&quot;: f&quot;Bearer {os.getenv(&apos;SUPABASE_SECRET_KEY&apos;)}&quot;,
+
+                    &quot;Content-Type&quot;: &quot;application/json&quot;,
+
+                },
+
+                json={
+
+                    &quot;job_id&quot;:      blackboard[&quot;job_id&quot;],
+
+                    &quot;phase&quot;:       blackboard[&quot;phase&quot;],
+
+                    &quot;active_agent&quot;:blackboard[&quot;active_agent&quot;],
+
+                    &quot;error&quot;:       error,
+
+                    &quot;blackboard&quot;:  json.dumps(log_bb),
+
+                }
+
+            )
+
+    except Exception:
+
+        pass  # Never let logging crash the error handler
+
+# Add this table to Supabase:
+
+-- CREATE TABLE pipeline_errors (
+
+--   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+--   job_id TEXT,
+
+--   phase TEXT,
+
+--   active_agent TEXT,
+
+--   error TEXT,
+
+--   blackboard JSONB,
+
+--   created_at TIMESTAMPTZ DEFAULT NOW()
+
+-- );
+
+11.11  Per-User Rate Limiting on Pipeline (LOWER PRIORITY)
+
+A free user could spam /pipeline/start and fill the entire queue, blocking all paid users. Add slowapi rate limiting keyed on user_id from the request body — not just IP, which is easy to rotate.
+
+# main.py — add per-user rate limiting
+
+from slowapi import Limiter
+
+from slowapi.util import get_remote_address
+
+from fastapi import Request
+
+# Rate limit keyed on user_id from request body
+
+# (IP-based is too easy to bypass)
+
+def get_user_id(request: Request) -&gt; str:
+
+    try:
+
+        body = request._json
+
+        return body.get(&quot;userId&quot;, get_remote_address(request))
+
+    except Exception:
+
+        return get_remote_address(request)
+
+limiter = Limiter(key_func=get_user_id)
+
+app.state.limiter = limiter
+
+# Free users: 3 generations per day
+
+# Paid users: handled separately via plan check in Next.js
+
+@app.post(&quot;/pipeline/start&quot;)
+
+@limiter.limit(&quot;3/day&quot;)
+
+async def start_pipeline(request: Request, body: dict,
+
+                         _=Depends(verify_secret)):
+
+    ...
+
+Step 11 Implementation Order
+
+Fix
+
+When to Do It
+
+Effort
+
+11.1 Redis queue
+
+Before first paying user
+
+~1 hour
+
+11.2 Copilot timeout
+
+Before launch
+
+~15 mins
+
+11.3 Blackboard pruning
+
+Before launch
+
+~30 mins
+
+11.4 Global job timeout
+
+Before launch — included in 11.1
+
+~5 mins
+
+11.5 Smarter exceptions
+
+After first 50 users
+
+~1 hour
+
+11.6 ChromaDB file path
+
+Before adding second worker
+
+~15 mins
+
+11.7 Deduplication
+
+After first 50 users
+
+~30 mins
+
+11.8 Token caching
+
+After first 50 users
+
+~20 mins
+
+11.9 Prompts to files
+
+When actively iterating prompts
+
+~1 hour
+
+11.10 Error logging
+
+After first paying user
+
+~45 mins
+
+11.11 Rate limiting
+
+After first 100 users
+
+~30 mins
+
+Appendix: Quick Reference
+
+Technology Stack Summary
+
+Layer
+
+Technology
+
+Purpose
+
+Frontend
+
+Next.js 14 (App Router)
+
+UI, API routes, Vercel deployment
+
+Database
+
+Supabase (PostgreSQL)
+
+Users, projects, billing state
+
+Auth
+
+Supabase Auth
+
+Google OAuth + email/password
+
+Storage
+
+Supabase Buckets
+
+Generated site code backups
+
+Pipeline
+
+FastAPI (Python)
+
+10-agent AI pipeline, no timeout
+
+Local AI
+
+Ollama
+
+Free local model inference
+
+Cloud AI
+
+Ollama Cloud
+
+Larger models for harder agents
+
+Code Gen
+
+GitHub Copilot SDK
+
+Website code generation — free via student plan
+
+Hosting
+
+Cloudflare Pages
+
+User-generated sites (free, unlimited)
+
+Billing
+
+Stripe
+
+Subscriptions and webhooks
+
+Email
+
+Resend
+
+Transactional emails
+
+RAG
+
+ChromaDB + BM25
+
+HTML/CSS pattern retrieval
+
+Environment Variable Reference
+
+Variable
+
+Used In
+
+Where to Get It
+
+NEXT_PUBLIC_SUPABASE_URL
+
+Frontend + backend
+
+Supabase Project Settings &gt; API
+
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+
+Frontend only
+
+Supabase Project Settings &gt; API
+
+SUPABASE_SECRET_KEY
+
+Backend only
+
+Supabase Project Settings &gt; API
+
+PIPELINE_SERVER_URL
+
+Next.js -&gt; FastAPI
+
+Cloudflare Tunnel URL or DO IP
+
+PIPELINE_SECRET
+
+Auth between services
+
+Generate: crypto.randomBytes(32).toString(hex)
+
+GOOGLE_PLACES_API_KEY
+
+Next.js /api/places
+
+Google Cloud Console
+
+GOOGLE_OAUTH_CLIENT_ID
+
+Supabase OAuth config
+
+Google Cloud Console
+
+GITHUB_APP_ID
+
+FastAPI GitHub auth
+
+GitHub App settings page
+
+GITHUB_APP_INSTALLATION_ID
+
+FastAPI GitHub auth
+
+URL after installing GitHub App
+
+GITHUB_APP_PRIVATE_KEY
+
+FastAPI GitHub auth
+
+Generated .pem file from GitHub App
+
+CLOUDFLARE_ACCOUNT_ID
+
+Next.js deployment
+
+Cloudflare dashboard URL
+
+CLOUDFLARE_API_TOKEN
+
+Next.js deployment
+
+Cloudflare &gt; My Profile &gt; API Tokens
+
+STRIPE_SECRET_KEY
+
+Next.js billing
+
+Stripe Dashboard &gt; Developers &gt; API Keys
+
+STRIPE_WEBHOOK_SECRET
+
+Webhook verification
+
+Stripe Dashboard &gt; Webhooks
+
+RESEND_API_KEY
+
+Email sending
+
+Resend Dashboard &gt; API Keys
+
+OLLAMA_API_KEY
+
+FastAPI cloud agents
+
+ollama.com &gt; Settings &gt; API Keys
+
+Agent Model Reference
+
+Agent
+
+Primary Model
+
+Fallback
+
+1 — Business Analyst
+
+Ollama Cloud: gpt-oss:20b-cloud
+
+Local: llama3.3:8b
+
+2 — Content Writer
+
+Local: qwen3:8b
+
+None needed
+
+3 — Style Agent
+
+Local: qwen3:8b
+
+None needed
+
+4 — Planner
+
+Ollama Cloud: glm-5.1:cloud
+
+Local: llama3.3:8b
+
+5 — Prompt Engineer
+
+Ollama Cloud: glm-5.1:cloud
+
+Local: llama3.3:8b
+
+6 — Code Generator
+
+GitHub Copilot SDK
+
+Local: qwen3:8b (manual fallback)
+
+7 — Debugger
+
+Ollama Cloud: minimax-m2.7:cloud
+
+Local: llama3.3:8b
+
+8 — SEO Agent
+
+Local: qwen3:8b
+
+None needed
+
+9 — QA Agent
+
+Ollama Cloud: minimax-m2.5:cloud
+
+Local: llama3.3:8b
+
+10 — Mobile Optimizer
+
+Local: qwen3:8b
+
+None needed
+
+Supervisor
+
+Local: llama3.3:8b
+
+Default approve on failure
+

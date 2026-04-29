@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -sL \"https://api.anthropic.com/v1/design/h/dh-XF1kuFYV6SCdevPoHbA?open_file=Onara+Wireframes.html\")",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "claude-flow"
+  ]
+}

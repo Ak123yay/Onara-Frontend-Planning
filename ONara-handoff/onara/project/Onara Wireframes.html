@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Onara · Wireframes</title>
+<link rel="stylesheet" href="wireframes.css" />
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #f0eee9; }
+  body { font-family: 'Inter', sans-serif; }
+  .dc-canvas-bg { background: #f0eee9 !important; }
+  /* Tighten artboard typography defaults */
+  .dc-card { background: var(--paper) !important; }
+</style>
+</head>
+<body class="wf">
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="wf-svg.jsx"></script>
+<script type="text/babel" src="wf-landing.jsx"></script>
+<script type="text/babel" src="wf-build.jsx"></script>
+<script type="text/babel" src="wf-generate.jsx"></script>
+<script type="text/babel" src="wf-dash.jsx"></script>
+<script type="text/babel" src="wf-extras.jsx"></script>
+
+<script type="text/babel" data-presets="env,react">
+const { useState } = React;
+
+// Card label header (lives outside the artboard via DCArtboard's label prop)
+const Lbl = ({ n, name }) => (
+  <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8 }}>
+    <span style={{ fontFamily: 'var(--hand)', fontSize: 17, color: 'var(--accent-ink)', fontWeight: 700 }}>{n}</span>
+    <span style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(60,50,40,0.7)' }}>{name}</span>
+  </span>
+);
+
+const App = () => (
+  <>
+    <WfSvgDefs />
+    <DesignCanvas
+      title="Onara · Wireframes"
+      subtitle="Sketchy minimal · 4 directions across the core surfaces"
+      defaultZoom={0.55}
+      data-screen-label="Onara wireframes canvas"
+    >
+
+      {/* INTRO POSTIT */}
+      <DCSection id="readme" title="Read me first" subtitle="System notes for these wireframes">
+        <DCArtboard id="readme-card" label={<Lbl n="00" name="orientation" />} width={760} height={420}>
+          <div className="screen wf-paper" style={{ padding: 40 }}>
+            <div className="mono" style={{ marginBottom: 6 }}>Onara · Wireframe set</div>
+            <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 400, fontSize: 36, letterSpacing: '-0.02em', margin: 0 }}>
+              Mapping the design space.
+            </h1>
+            <p style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 14, maxWidth: 540, lineHeight: 1.6 }}>
+              Lo-fi sketches that prioritize structure and flow over polish. One warm accent (terracotta), Fraunces serif for headings, Caveat for handwritten annotations. Each surface has 2–4 directions side by side — pick what feels right and we'll push to hi-fi.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 24 }}>
+              <div>
+                <div className="mono" style={{ marginBottom: 6 }}>Surfaces covered</div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.7, color: 'var(--ink-2)' }}>
+                  <li>Landing page <span style={{ color: 'var(--ink-4)' }}>· 4 directions</span></li>
+                  <li>Build flow: search → confirm → style</li>
+                  <li>Generation progress <span style={{ color: 'var(--ink-4)' }}>· 4 directions</span></li>
+                  <li>Result / "site is ready"</li>
+                  <li>Dashboard: empty, populated, detail</li>
+                  <li>Pricing, trial-end state, mobile</li>
+                </ul>
+              </div>
+              <div>
+                <div className="mono" style={{ marginBottom: 6 }}>Reading the sketches</div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, lineHeight: 1.7, color: 'var(--ink-2)' }}>
+                  <li><span style={{ fontFamily: 'var(--hand)', color: 'var(--accent-ink)', fontSize: 15 }}>handwritten</span> = my notes / arrows</li>
+                  <li>Striped boxes = real photos / imagery placeholders</li>
+                  <li>Solid bars = headlines & body text</li>
+                  <li>Wobble = "this is a sketch, not final"</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </DCArtboard>
+      </DCSection>
+
+      {/* LANDING */}
+      <DCSection id="landing" title="Landing page" subtitle="The hook — Google Profile in, finished site out">
+        <DCArtboard id="landing-1" label={<Lbl n="01" name="Search-led hero" />} width={1280} height={780}><LandingV1 /></DCArtboard>
+        <DCArtboard id="landing-2" label={<Lbl n="02" name="Before / After" />} width={1280} height={780}><LandingV2 /></DCArtboard>
+        <DCArtboard id="landing-3" label={<Lbl n="03" name="Bold statement" />} width={1280} height={780}><LandingV3 /></DCArtboard>
+        <DCArtboard id="landing-4" label={<Lbl n="04" name="Live demo" />} width={1280} height={780}><LandingV4 /></DCArtboard>
+      </DCSection>
+
+      {/* BUILD FLOW */}
+      <DCSection id="build" title="Build flow" subtitle="Search → confirm Google Business → style preferences">
+        <DCArtboard id="search-1" label={<Lbl n="05" name="Search · centered" />} width={1280} height={780}><BuildSearchV1 /></DCArtboard>
+        <DCArtboard id="search-2" label={<Lbl n="06" name="Search · split + map" />} width={1280} height={780}><BuildSearchV2 /></DCArtboard>
+        <DCArtboard id="confirm-1" label={<Lbl n="07" name="Confirm · single card" />} width={1280} height={920}><BuildConfirmV1 /></DCArtboard>
+        <DCArtboard id="confirm-2" label={<Lbl n="08" name="Confirm · sectioned + raw" />} width={1280} height={780}><BuildConfirmV2 /></DCArtboard>
+        <DCArtboard id="style-1" label={<Lbl n="09" name="Style preferences" />} width={1280} height={920}><BuildStyleV1 /></DCArtboard>
+      </DCSection>
+
+      {/* GENERATION */}
+      <DCSection id="generate" title="Generation progress" subtitle="60–120 second wait · the highest-stakes screen in the product">
+        <DCArtboard id="gen-1" label={<Lbl n="10" name="Checklist + live preview" />} width={1280} height={780}><GenerateV1 /></DCArtboard>
+        <DCArtboard id="gen-2" label={<Lbl n="11" name="Single morphing card" />} width={1280} height={780}><GenerateV2 /></DCArtboard>
+        <DCArtboard id="gen-3" label={<Lbl n="12" name="Calm progress bar" />} width={1280} height={780}><GenerateV3 /></DCArtboard>
+        <DCArtboard id="gen-4" label={<Lbl n="13" name="Live agent log" />} width={1280} height={780}><GenerateV4 /></DCArtboard>
+      </DCSection>
+
+      {/* RESULT */}
+      <DCSection id="result" title="Site ready" subtitle="The payoff moment after generation">
+        <DCArtboard id="result-1" label={<Lbl n="14" name="Result screen" />} width={1280} height={780}><ResultScreen /></DCArtboard>
+      </DCSection>
+
+      {/* DASHBOARD */}
+      <DCSection id="dash" title="Dashboard" subtitle="Empty state, populated, and a detail view">
+        <DCArtboard id="dash-empty" label={<Lbl n="15" name="Empty · first run" />} width={1280} height={780}><DashEmptyV1 /></DCArtboard>
+        <DCArtboard id="dash-sites" label={<Lbl n="16" name="My sites · populated" />} width={1280} height={780}><DashSitesV1 /></DCArtboard>
+        <DCArtboard id="dash-detail" label={<Lbl n="17" name="Site detail + revisions" />} width={1280} height={820}><DashSiteDetail /></DCArtboard>
+      </DCSection>
+
+      {/* PRICING + TRIAL */}
+      <DCSection id="commerce" title="Pricing & trial" subtitle="Conversion moments">
+        <DCArtboard id="pricing" label={<Lbl n="18" name="Pricing" />} width={1280} height={780}><PricingScreen /></DCArtboard>
+        <DCArtboard id="trial" label={<Lbl n="19" name="Trial ending" />} width={1280} height={780}><TrialEndState /></DCArtboard>
+      </DCSection>
+
+      {/* AUTH */}
+      <DCSection id="auth" title="Auth pages" subtitle="Google OAuth primary, email/password fallback">
+        <DCArtboard id="auth-1" label={<Lbl n="23" name="Split · testimonial" />} width={1280} height={780}><AuthSplit /></DCArtboard>
+        <DCArtboard id="auth-2" label={<Lbl n="24" name="Centered card" />} width={1280} height={780}><AuthCentered /></DCArtboard>
+        <DCArtboard id="auth-3" label={<Lbl n="25" name="Generate-first signup" />} width={1280} height={780}><AuthInline /></DCArtboard>
+      </DCSection>
+
+      {/* DOMAIN */}
+      <DCSection id="domain" title="Custom domain" subtitle="$10 add-on · 2 CNAMEs · Cloudflare verifies">
+        <DCArtboard id="domain-1" label={<Lbl n="26" name="Connect a domain" />} width={1280} height={820}><DomainConnect /></DCArtboard>
+      </DCSection>
+
+      {/* REVISION */}
+      <DCSection id="revision" title="Revision request" subtitle="Plain-English edits · only changed components rerun">
+        <DCArtboard id="rev-1" label={<Lbl n="27" name="Request a change" />} width={1280} height={820}><RevisionRequest /></DCArtboard>
+      </DCSection>
+
+      {/* DOWNGRADE */}
+      <DCSection id="offline" title="Site goes offline" subtitle="Trial ended or payment failed — graceful, recoverable">
+        <DCArtboard id="off-1" label={<Lbl n="28" name="Dashboard · sites paused" />} width={1280} height={780}><DowngradeOffline /></DCArtboard>
+        <DCArtboard id="off-2" label={<Lbl n="29" name="Public suspended page" />} width={1280} height={780}><PublicSuspended /></DCArtboard>
+      </DCSection>
+
+      {/* MOBILE */}
+      <DCSection id="mobile" title="Mobile" subtitle="Key screens on a phone">
+        <DCArtboard id="m-landing" label={<Lbl n="20" name="Mobile landing" />} width={320} height={640}><MobileLanding /></DCArtboard>
+        <DCArtboard id="m-generate" label={<Lbl n="21" name="Mobile generation" />} width={320} height={640}><MobileGenerate /></DCArtboard>
+        <DCArtboard id="m-dash" label={<Lbl n="22" name="Mobile dashboard" />} width={320} height={640}><MobileDash /></DCArtboard>
+      </DCSection>
+
+    </DesignCanvas>
+  </>
+);
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

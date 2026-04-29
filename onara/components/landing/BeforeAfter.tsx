@@ -11,10 +11,28 @@ export default function BeforeAfterCards() {
   const afterRef = useRef<HTMLDivElement | null>(null);
   const arrowRef = useRef<SVGPathElement | null>(null);
   const labelRef = useRef<HTMLDivElement | null>(null);
+  const introDoneRef = useRef(false);
 
   useEffect(() => {
     registerGsap();
     if (prefersReducedMotion() || isLowPowerDevice()) return;
+
+    gsap.set(beforeRef.current, {
+      rotation: -2,
+      scale: 1,
+      x: 0,
+      y: 0,
+      opacity: 1,
+      zIndex: 2,
+    });
+    gsap.set(afterRef.current, {
+      rotation: 5,
+      scale: 0.92,
+      x: 18,
+      y: 12,
+      opacity: 0.5,
+      zIndex: 1,
+    });
 
     // Initial entrance
     gsap.from(beforeRef.current, {
@@ -54,13 +72,20 @@ export default function BeforeAfterCards() {
       });
     }
 
+    const introTimer = window.setTimeout(() => {
+      introDoneRef.current = true;
+    }, 2600);
     const t = setInterval(() => setStage((s) => (s + 1) % 2), 3400);
-    return () => clearInterval(t);
+    return () => {
+      clearInterval(t);
+      clearTimeout(introTimer);
+    };
   }, []);
 
   // Drive depth per stage
   useEffect(() => {
     if (prefersReducedMotion() || isLowPowerDevice()) return;
+    if (!introDoneRef.current) return;
     const before = beforeRef.current;
     const after = afterRef.current;
     if (!before || !after) return;

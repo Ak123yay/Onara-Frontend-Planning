@@ -7,19 +7,22 @@ import AgentReveal from "@/components/landing/AgentReveal";
 import LandingPricing from "@/components/landing/LandingPricing";
 import CTABanner from "@/components/landing/CTABanner";
 import Footer from "@/components/landing/Footer";
+import SmoothScrollProvider from "@/components/motion/SmoothScrollProvider";
 
 export default function Home() {
   return (
-    <main className="bg-warm-grad min-h-screen">
-      <TopNav />
-      <Hero />
-      <MarqueeStrip />
-      <Stats />
-      <HowItWorks />
-      <AgentReveal />
-      <LandingPricing />
-      <CTABanner />
-      <Footer />
-    </main>
+    <SmoothScrollProvider>
+      <main className="bg-warm-grad min-h-screen">
+        <TopNav />
+        <Hero />
+        <MarqueeStrip />
+        <Stats />
+        <HowItWorks />
+        <AgentReveal />
+        <LandingPricing />
+        <CTABanner />
+        <Footer />
+      </main>
+    </SmoothScrollProvider>
   );
 }

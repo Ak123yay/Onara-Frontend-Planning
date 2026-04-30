@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { registerGsap, gsap, prefersReducedMotion, isLowPowerDevice } from "@/lib/gsap";
 
 const AGENTS = [
@@ -24,7 +24,7 @@ export default function AgentReveal() {
   const itemRefs = useRef<HTMLDivElement[]>([]);
   const progressRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     registerGsap();
     const section = sectionRef.current;
     const items = itemRefs.current;
@@ -37,15 +37,15 @@ export default function AgentReveal() {
     }
 
     const ctx = gsap.context(() => {
-      gsap.from(eyebrowRef.current, {
-        opacity: 0,
-        y: 16,
+      gsap.to(eyebrowRef.current, {
+        opacity: 1,
+        y: 0,
         duration: 0.8,
         scrollTrigger: { trigger: eyebrowRef.current, start: "top 85%" },
       });
-      gsap.from(headlineRef.current, {
-        opacity: 0,
-        y: 24,
+      gsap.to(headlineRef.current, {
+        opacity: 1,
+        y: 0,
         duration: 1,
         scrollTrigger: { trigger: headlineRef.current, start: "top 85%" },
       });
@@ -79,12 +79,17 @@ export default function AgentReveal() {
       <div ref={stickyRef} className="relative min-h-screen px-6 md:px-12 py-16 md:py-24 grid lg:grid-cols-[1fr_1.2fr] gap-12 items-start">
         {/* Left — sticky title */}
         <div>
-          <div ref={eyebrowRef} className="eyebrow mb-5">
+          <div
+            ref={eyebrowRef}
+            className="eyebrow mb-5"
+            style={{ opacity: 0, transform: "translate3d(0, 16px, 0)" }}
+          >
             How it works
           </div>
           <h2
             ref={headlineRef}
             className="serif text-[clamp(36px,5.5vw,72px)] leading-[1.02] tracking-[-0.025em] m-0"
+            style={{ opacity: 0, transform: "translate3d(0, 24px, 0)" }}
           >
             Ten small agents.<br />
             <span className="text-[var(--accent)] italic">One finished site.</span>
@@ -113,6 +118,7 @@ export default function AgentReveal() {
                 if (el) itemRefs.current[i] = el;
               }}
               className="flex gap-5"
+              style={{ opacity: 0.18, transform: "translate3d(-10px, 0, 0)" }}
             >
               <div className="shrink-0 w-12 h-12 rounded-full border border-[var(--rule)] bg-[var(--paper)] flex items-center justify-center serif text-[18px] text-[var(--accent-ink)]">
                 {a.id}

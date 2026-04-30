@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import Link from "next/link";
 import SplitTextReveal from "@/components/motion/SplitTextReveal";
 import MagneticButton from "@/components/motion/MagneticButton";
@@ -14,15 +14,21 @@ export default function Hero() {
   const subRef = useRef<HTMLParagraphElement | null>(null);
   const ctasRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     registerGsap();
-    if (prefersReducedMotion() || isLowPowerDevice()) return;
+    const eyebrow = eyebrowRef.current;
+    const sub = subRef.current;
+    const ctas = ctasRef.current;
+    if (prefersReducedMotion() || isLowPowerDevice()) {
+      gsap.set([eyebrow, sub, ctas], { opacity: 1, y: 0, clearProps: "transform" });
+      return;
+    }
 
     const ctx = gsap.context(() => {
       // Eyebrow + sub fade
-      gsap.from(eyebrowRef.current, { opacity: 0, y: 20, duration: 0.9, delay: 0.2, ease: "power3.out" });
-      gsap.from(subRef.current, { opacity: 0, y: 18, duration: 1, delay: 1.2, ease: "power3.out" });
-      gsap.from(ctasRef.current, { opacity: 0, y: 18, duration: 1, delay: 1.45, ease: "power3.out" });
+      gsap.to(eyebrowRef.current, { opacity: 1, y: 0, duration: 0.9, delay: 0.2, ease: "power3.out" });
+      gsap.to(subRef.current, { opacity: 1, y: 0, duration: 1, delay: 1.2, ease: "power3.out" });
+      gsap.to(ctasRef.current, { opacity: 1, y: 0, duration: 1, delay: 1.45, ease: "power3.out" });
 
       // Animated terracotta blob
       const blob = blobRef.current;
@@ -87,7 +93,11 @@ export default function Hero() {
       <div className="relative grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-10 lg:gap-16 items-center max-w-[1400px] mx-auto">
         {/* Left — copy */}
         <div className="relative">
-          <div ref={eyebrowRef} className="eyebrow mb-5">
+          <div
+            ref={eyebrowRef}
+            className="eyebrow mb-5"
+            style={{ opacity: 0, transform: "translate3d(0, 20px, 0)" }}
+          >
             For independent restaurants &amp; cafés
           </div>
 
@@ -109,11 +119,16 @@ export default function Hero() {
           <p
             ref={subRef}
             className="mt-7 max-w-[480px] text-[17px] leading-[1.55] text-[var(--ink-2)]"
+            style={{ opacity: 0, transform: "translate3d(0, 18px, 0)" }}
           >
             Type your business name. Watch ten agents read your reviews, photos, hours and menu — and build you a custom site in 90 seconds. No templates. No drag-and-drop.
           </p>
 
-          <div ref={ctasRef} className="mt-9 flex items-center gap-4 flex-wrap">
+          <div
+            ref={ctasRef}
+            className="mt-9 flex items-center gap-4 flex-wrap"
+            style={{ opacity: 0, transform: "translate3d(0, 18px, 0)" }}
+          >
             <MagneticButton href="/build" className="btn btn-accent btn-lg">
               Build mine free
               <ArrowRight size={14} />
@@ -135,11 +150,12 @@ export default function Hero() {
 
 function Underline() {
   const pathRef = useRef<SVGPathElement | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     registerGsap();
     if (prefersReducedMotion()) return;
     const p = pathRef.current;
     if (!p) return;
+    p.style.opacity = "1";
     const len = p.getTotalLength();
     p.style.strokeDasharray = `${len}`;
     p.style.strokeDashoffset = `${len}`;
@@ -164,6 +180,7 @@ function Underline() {
         strokeWidth="3"
         strokeLinecap="round"
         fill="none"
+        style={{ opacity: 0 }}
       />
     </svg>
   );

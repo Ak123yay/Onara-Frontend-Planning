@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode, type JSX } from "react";
+import { useLayoutEffect, useRef, type ReactNode, type JSX } from "react";
 import { registerGsap, gsap, prefersReducedMotion, isLowPowerDevice } from "@/lib/gsap";
 
 type Props = {
@@ -26,7 +26,7 @@ export default function SplitTextReveal({
 }: Props) {
   const wrapRef = useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     registerGsap();
     const el = wrapRef.current;
     if (!el) return;
@@ -65,6 +65,7 @@ export default function SplitTextReveal({
     });
 
     gsap.set(wordSpans, { yPercent: y });
+    el.style.opacity = "1";
 
     const tween = () =>
       gsap.to(wordSpans, {
@@ -96,7 +97,7 @@ export default function SplitTextReveal({
 
   return (
     // @ts-expect-error - dynamic tag
-    <As ref={wrapRef} className={className}>
+    <As ref={wrapRef} className={className} style={{ opacity: 0 }}>
       {children}
     </As>
   );

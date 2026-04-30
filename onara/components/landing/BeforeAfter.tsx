@@ -109,7 +109,11 @@ export default function BeforeAfterCards() {
       <div
         ref={beforeRef}
         className="absolute top-0 right-4 sm:right-10 w-[320px] sm:w-[360px] bg-white rounded-xl overflow-hidden"
-        style={{ willChange: "transform, opacity" }}
+        style={{
+          willChange: "transform, opacity",
+          opacity: 1,
+          transform: "translate3d(0, 0, 0) rotate(-2deg) scale(1)",
+        }}
       >
         <div className="px-3 py-2 border-b border-[#eee] text-[11px] text-[#5f6368] flex items-center gap-2">
           <span
@@ -145,7 +149,11 @@ export default function BeforeAfterCards() {
       <div
         ref={afterRef}
         className="absolute bottom-0 left-0 w-[420px] sm:w-[460px] bg-white rounded-xl overflow-hidden"
-        style={{ willChange: "transform, opacity" }}
+        style={{
+          willChange: "transform, opacity",
+          opacity: 0.5,
+          transform: "translate3d(18px, 12px, 0) rotate(5deg) scale(0.92)",
+        }}
       >
         <div className="chrome">
           <div className="chrome-dots">

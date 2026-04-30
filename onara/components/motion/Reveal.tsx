@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { registerGsap, gsap, ScrollTrigger, prefersReducedMotion, isLowPowerDevice } from "@/lib/gsap";
 
 type Props = {
@@ -24,7 +24,7 @@ export default function Reveal({
 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     registerGsap();
     const el = ref.current;
     if (!el) return;
@@ -53,7 +53,11 @@ export default function Reveal({
   }, [delay, y, duration, start, once]);
 
   return (
-    <div ref={ref} className={className}>
+    <div
+      ref={ref}
+      className={className}
+      style={{ opacity: 0, transform: `translate3d(0, ${y}px, 0)` }}
+    >
       {children}
     </div>
   );

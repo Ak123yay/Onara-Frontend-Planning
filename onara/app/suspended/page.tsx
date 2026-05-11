@@ -13,19 +13,17 @@ export default function SuspendedPage() {
           <span className="chrome-dot" />
           <span className="chrome-dot" />
         </div>
-        <div className="chrome-url">lupitastacos.com</div>
+        <div className="chrome-url">mikespizza.com</div>
       </div>
       <div className="text-center max-w-[460px] py-10">
-        <div
-          className="w-14 h-14 rounded-full border-[1.5px] border-[var(--ink)] mx-auto mb-5 flex items-center justify-center text-[var(--ink-3)]"
-        >
+        <div className="w-14 h-14 rounded-full border-[1.5px] border-[var(--ink)] mx-auto mb-5 flex items-center justify-center text-[var(--ink-3)]">
           <Globe size={22} />
         </div>
         <h1 className="serif text-[clamp(24px,3vw,32px)] m-0 tracking-[-0.015em]">
           This site is paused.
         </h1>
         <p className="text-[14px] text-[var(--ink-3)] mt-3 leading-[1.5]">
-          Lupita&apos;s Tacos is being updated and will be back shortly. If this is your site, sign in to restore it.
+          Mike&apos;s Pizza is being updated and will be back shortly. If this is your site, sign in to restore it.
         </p>
         <Link href="/auth/sign-in" className="btn btn-soft mt-5">
           Sign in to Onara

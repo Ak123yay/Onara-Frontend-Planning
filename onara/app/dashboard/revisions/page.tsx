@@ -11,7 +11,7 @@ export default function RevisionsOverviewPage() {
         sub="Across all sites"
         title="Revisions"
         action={
-          <Link href="/dashboard/site/lupitas/revisions" className="btn btn-accent btn-sm">
+          <Link href="/dashboard/site/mikes/revisions" className="btn btn-accent btn-sm">
             <Edit size={12} /> Request a revision
           </Link>
         }
@@ -22,7 +22,7 @@ export default function RevisionsOverviewPage() {
           {REVISIONS.map((revision, index) => (
             <Link
               key={revision.v}
-              href="/dashboard/site/lupitas/revisions"
+              href="/dashboard/site/mikes/revisions"
               className={`flex items-center gap-4 p-4 hover:bg-[var(--paper-2)] transition-colors ${
                 index ? "border-t border-[var(--rule-2)]" : ""
               }`}
@@ -31,7 +31,7 @@ export default function RevisionsOverviewPage() {
               <div className="flex-1 min-w-0">
                 <div className="text-[13px]">{revision.what}</div>
                 <div className="text-[11px] text-[var(--ink-3)]">
-                  Lupita&apos;s Tacos · {revision.when}
+                  Mike&apos;s Pizza · {revision.when}
                 </div>
               </div>
               <ArrowRight size={13} className="text-[var(--ink-3)]" />

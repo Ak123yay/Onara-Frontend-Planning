@@ -1,23 +1,23 @@
 import TopNav from "@/components/nav/TopNav";
 import Hero from "@/components/landing/Hero";
-import MarqueeStrip from "@/components/landing/MarqueeStrip";
-import Stats from "@/components/landing/Stats";
 import HowItWorks from "@/components/landing/HowItWorks";
-import AgentReveal from "@/components/landing/AgentReveal";
-import LandingPricing from "@/components/landing/LandingPricing";
+import Examples from "@/components/landing/Examples";
+import Stats from "@/components/landing/Stats";
 import CTABanner from "@/components/landing/CTABanner";
 import Footer from "@/components/landing/Footer";
+import ScrollProgress from "@/components/motion/ScrollProgress";
+import CursorFollower from "@/components/motion/CursorFollower";
 
 export default function Home() {
   return (
-    <main className="bg-warm-grad min-h-screen">
+    <main className="bg-paper-grain min-h-screen">
+      <CursorFollower />
+      <ScrollProgress />
       <TopNav />
       <Hero />
-      <MarqueeStrip />
-      <Stats />
       <HowItWorks />
-      <AgentReveal />
-      <LandingPricing />
+      <Examples />
+      <Stats />
       <CTABanner />
       <Footer />
     </main>

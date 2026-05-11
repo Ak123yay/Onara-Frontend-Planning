@@ -130,7 +130,7 @@ export default function Sidebar({ trialDaysLeft = 11 }: { trialDaysLeft?: number
         <div className="flex-1" />
 
         <div
-          className="rounded-xl p-3 text-[11px] mb-3"
+          className="rounded-2xl p-3 text-[11px] mb-3"
           style={{ background: "var(--accent-soft)" }}
         >
           <div className="flex items-center gap-2 text-[var(--accent-ink)]">

@@ -1,83 +1,124 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { ArrowRight } from "@/lib/icons";
 
 export default function AuthForm({ mode = "sign-up" }: { mode?: "sign-in" | "sign-up" }) {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
 
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    router.push("/dashboard");
+  };
+
+  const fieldVariants = {
+    hidden: { opacity: 0, y: 8 },
+    visible: { opacity: 1, y: 0 },
+  };
+
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        // mock — would post to backend
+    <motion.form
+      onSubmit={onSubmit}
+      initial="hidden"
+      animate="visible"
+      variants={{
+        hidden: {},
+        visible: { transition: { staggerChildren: 0.07, delayChildren: 0.1 } },
       }}
-      className="max-w-[440px]"
     >
-      <button
+      <motion.button
         type="button"
+        onClick={() => router.push("/dashboard")}
+        variants={fieldVariants}
+        transition={{ duration: 0.6 }}
+        whileHover={{ y: -1 }}
+        whileTap={{ scale: 0.99 }}
         className="btn btn-soft w-full"
-        style={{ width: "100%" }}
+        style={{ width: "100%", padding: "14px 16px", fontSize: 14 }}
       >
         <GoogleMark />
         Continue with Google
-      </button>
-      <div className="flex items-center gap-3 my-5 text-[var(--ink-4)] text-[11px]">
-        <div className="flex-1 h-px bg-[var(--rule-2)]" /> or with email <div className="flex-1 h-px bg-[var(--rule-2)]" />
-      </div>
-      <label className="mono mb-1 block text-[9px]" htmlFor="email">Email</label>
-      <input
-        id="email"
-        type="email"
-        className="input"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="mike@mikespizza.com"
-        required
-      />
-      <label className="mono mt-3.5 mb-1 block text-[9px]" htmlFor="pw">Password</label>
-      <input
-        id="pw"
-        type="password"
-        className="input"
-        value={pw}
-        onChange={(e) => setPw(e.target.value)}
-        placeholder="••••••••••"
-        required
-      />
-      <button type="submit" className="btn btn-accent mt-4 w-full" style={{ width: "100%" }}>
+      </motion.button>
+
+      <motion.div
+        className="flex items-center gap-3 my-5 text-[var(--ink-4)] text-[11px]"
+        variants={fieldVariants}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="flex-1 h-px bg-[var(--rule-2)]" />
+        <span className="mono">or with email</span>
+        <div className="flex-1 h-px bg-[var(--rule-2)]" />
+      </motion.div>
+
+      <motion.div variants={fieldVariants} transition={{ duration: 0.5 }}>
+        <label
+          className="mono mb-1.5 block text-[10px]"
+          style={{ letterSpacing: "0.08em" }}
+          htmlFor="email"
+        >
+          Email
+        </label>
+        <input
+          id="email"
+          type="email"
+          className="input"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="mike@mikespizza.com"
+          required
+        />
+      </motion.div>
+
+      <motion.div variants={fieldVariants} transition={{ duration: 0.5 }} className="mt-4">
+        <label
+          className="mono mb-1.5 block text-[10px]"
+          style={{ letterSpacing: "0.08em" }}
+          htmlFor="pw"
+        >
+          Password
+        </label>
+        <input
+          id="pw"
+          type="password"
+          className="input"
+          value={pw}
+          onChange={(e) => setPw(e.target.value)}
+          placeholder="••••••••••"
+          required
+        />
+      </motion.div>
+
+      <motion.button
+        type="submit"
+        variants={fieldVariants}
+        transition={{ duration: 0.5 }}
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
+        className="btn btn-accent w-full mt-5"
+        style={{ width: "100%", padding: "14px 16px" }}
+      >
         {mode === "sign-up" ? "Create account" : "Sign in"}
-        <ArrowRight size={13} />
-      </button>
-      <div className="text-[11px] text-[var(--ink-3)] mt-3.5 leading-[1.5]">
-        By continuing, you agree to our Terms.{" "}
-        {mode === "sign-up" ? (
-          <>
-            Already have an account?{" "}
-            <Link href="/auth/sign-in" className="text-[var(--ink)] underline">
-              Sign in
-            </Link>
-            .
-          </>
-        ) : (
-          <>
-            New to Onara?{" "}
-            <Link href="/auth/sign-up" className="text-[var(--ink)] underline">
-              Create an account
-            </Link>
-            .
-          </>
-        )}
-      </div>
-    </form>
+        <ArrowRight size={14} />
+      </motion.button>
+
+      <motion.div
+        className="text-[11px] text-[var(--ink-3)] mt-4 leading-[1.5]"
+        variants={fieldVariants}
+        transition={{ duration: 0.5 }}
+      >
+        By continuing, you agree to our Terms.
+      </motion.div>
+    </motion.form>
   );
 }
 
 function GoogleMark() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
       <path
         fill="#4285F4"
         d="M21.6 12.23c0-.74-.07-1.45-.2-2.13H12v4.04h5.39a4.6 4.6 0 0 1-2 3.02v2.5h3.23c1.89-1.74 2.98-4.31 2.98-7.43z"

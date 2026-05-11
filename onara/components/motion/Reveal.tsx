@@ -1,17 +1,16 @@
 "use client";
 
-import { useLayoutEffect, useRef, type ReactNode } from "react";
-import { registerGsap, gsap, ScrollTrigger, prefersReducedMotion, isLowPowerDevice } from "@/lib/gsap";
+import { motion, useReducedMotion } from "framer-motion";
+import { type ReactNode } from "react";
 
-type Props = {
+interface Props {
   children: ReactNode;
   className?: string;
   delay?: number;
   y?: number;
   duration?: number;
-  start?: string;
   once?: boolean;
-};
+}
 
 export default function Reveal({
   children,
@@ -19,46 +18,20 @@ export default function Reveal({
   delay = 0,
   y = 28,
   duration = 0.9,
-  start = "top 85%",
   once = true,
 }: Props) {
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  useLayoutEffect(() => {
-    registerGsap();
-    const el = ref.current;
-    if (!el) return;
-    if (prefersReducedMotion() || isLowPowerDevice()) {
-      gsap.set(el, { opacity: 1, y: 0 });
-      return;
-    }
-    gsap.set(el, { opacity: 0, y });
-    const st = ScrollTrigger.create({
-      trigger: el,
-      start,
-      once,
-      onEnter: () => {
-        gsap.to(el, {
-          opacity: 1,
-          y: 0,
-          duration,
-          delay,
-          ease: "power3.out",
-        });
-      },
-    });
-    return () => {
-      st.kill();
-    };
-  }, [delay, y, duration, start, once]);
+  const reduced = useReducedMotion();
+  if (reduced) return <div className={className}>{children}</div>;
 
   return (
-    <div
-      ref={ref}
+    <motion.div
       className={className}
-      style={{ opacity: 0, transform: `translate3d(0, ${y}px, 0)` }}
+      initial={{ opacity: 0, y }}
+      whileInView={{ opacity: 1, y: 0 }}
+      transition={{ duration, delay, ease: [0.2, 0.7, 0.3, 1] }}
+      viewport={{ once, margin: "-15%" }}
     >
       {children}
-    </div>
+    </motion.div>
   );
 }

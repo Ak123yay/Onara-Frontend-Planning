@@ -1,7 +1,23 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { registerGsap, gsap, ScrollTrigger, prefersReducedMotion, isLowPowerDevice } from "@/lib/gsap";
+import {
+  motion,
+  useInView,
+  useMotionValue,
+  useTransform,
+  animate,
+  useReducedMotion,
+} from "framer-motion";
+
+interface Props {
+  to: number;
+  prefix?: string;
+  suffix?: string;
+  decimals?: number;
+  duration?: number;
+  className?: string;
+}
 
 export default function Counter({
   to,
@@ -10,47 +26,35 @@ export default function Counter({
   decimals = 0,
   duration = 1.6,
   className,
-}: {
-  to: number;
-  prefix?: string;
-  suffix?: string;
-  decimals?: number;
-  duration?: number;
-  className?: string;
-}) {
+}: Props) {
   const ref = useRef<HTMLSpanElement | null>(null);
+  const inView = useInView(ref, { once: true, margin: "-15%" });
+  const value = useMotionValue(0);
+  const reduced = useReducedMotion();
+  const formatted = useTransform(value, (v) =>
+    decimals
+      ? v.toFixed(decimals)
+      : Math.round(v).toLocaleString("en-US"),
+  );
 
   useEffect(() => {
-    registerGsap();
-    const el = ref.current;
-    if (!el) return;
-    if (prefersReducedMotion() || isLowPowerDevice()) {
-      el.textContent = `${prefix}${to.toFixed(decimals)}${suffix}`;
+    if (!inView) return;
+    if (reduced) {
+      value.set(to);
       return;
     }
-    const obj = { v: 0 };
-    const st = ScrollTrigger.create({
-      trigger: el,
-      start: "top 90%",
-      once: true,
-      onEnter: () => {
-        gsap.to(obj, {
-          v: to,
-          duration,
-          ease: "power3.out",
-          onUpdate: () => {
-            const formatted = decimals
-              ? obj.v.toFixed(decimals)
-              : Math.round(obj.v).toLocaleString("en-US");
-            el.textContent = `${prefix}${formatted}${suffix}`;
-          },
-        });
-      },
+    const controls = animate(value, to, {
+      duration,
+      ease: [0.2, 0.7, 0.3, 1],
     });
-    return () => {
-      st.kill();
-    };
-  }, [to, prefix, suffix, decimals, duration]);
+    return () => controls.stop();
+  }, [inView, to, duration, reduced, value]);
 
-  return <span ref={ref} className={className}>{prefix}0{suffix}</span>;
+  return (
+    <span ref={ref} className={className}>
+      {prefix}
+      <motion.span>{formatted}</motion.span>
+      {suffix}
+    </span>
+  );
 }
